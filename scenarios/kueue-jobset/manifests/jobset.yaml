@@ -1,0 +1,39 @@
+# A single JobSet template modelling a small distributed training run: one
+# "workers" replicatedJob fanned out to 2 identical Jobs (think 2 training
+# nodes), each pod claiming a whole 8-GPU node. The scenario creates this twice
+# (generateName gives each a unique name).
+#
+# Kueue treats the WHOLE JobSet (both child Jobs = 16 GPUs) as one gang Workload
+# and controls spec.suspend: nothing starts until the entire gang fits in quota.
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  generateName: training-
+  namespace: jobset
+  labels:
+    kueue.x-k8s.io/queue-name: jobset-queue
+spec:
+  # Start suspended; Kueue unsuspends the JobSet once the gang is admitted.
+  suspend: true
+  replicatedJobs:
+    - name: workers
+      replicas: 2
+      template:
+        spec:
+          parallelism: 1
+          completions: 1
+          backoffLimit: 0
+          template:
+            spec:
+              restartPolicy: Never
+              containers:
+                - name: trainer
+                  # pause placeholder: no real compute, the pod just occupies its
+                  # GPU reservation so the gang/quota behaviour is observable.
+                  image: registry.k8s.io/pause:3.10
+                  resources:
+                    requests:
+                      cpu: "50m"
+                      nvidia.com/gpu: "8"
+                    limits:
+                      nvidia.com/gpu: "8"

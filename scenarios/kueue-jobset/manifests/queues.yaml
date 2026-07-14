@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jobset
+---
+# Quota covers cpu + nvidia.com/gpu. nvidia.com/gpu is the binding constraint:
+# one JobSet runs 2 worker Jobs x 8 GPUs = 16 GPUs, so the quota of 16 admits
+# exactly one JobSet. A second JobSet's whole gang stays Pending until the first
+# releases its GPUs.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: jobset-cq
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["cpu", "nvidia.com/gpu"]
+      flavors:
+        - name: gpu-flavor
+          resources:
+            - name: cpu
+              nominalQuota: "100"
+            - name: nvidia.com/gpu
+              nominalQuota: "16"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  namespace: jobset
+  name: jobset-queue
+spec:
+  clusterQueue: jobset-cq

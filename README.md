@@ -1,10 +1,14 @@
 # kueue-demo-lab: a multi-scenario Kueue lab on kind
 
-A self-contained local lab that shows how **Kueue** wires together with
-**LeaderWorkerSet (LWS)** and its scheduling features. Everything runs on a
-single **kind** cluster; there is **no real workload** (all pods are `pause`
-placeholders) and **no real GPU** (each worker advertises **8** fake
-`nvidia.com/gpu`, like a real 8-GPU node).
+A self-contained local lab that shows how **Kueue** wires together with common
+Kubernetes batch/AI building blocks — **LeaderWorkerSet (LWS)**, **RayJob**,
+**JobSet**, **Dynamic Resource Allocation (DRA)**, and **NVIDIA Grove** — plus
+Kueue's own scheduling features (topology-aware scheduling, fair sharing,
+workload priority, preemption). Everything runs on a single **kind** cluster
+with **no real GPU** (each worker advertises **8** fake `nvidia.com/gpu`, like a
+real 8-GPU node). Pods are `pause` placeholders — **no real compute** — the one
+exception being `kueue-rayjob`, which runs an actual Ray image to form a real
+cluster.
 
 One shared cluster hosts several independent scenarios, each in its own folder
 under `scenarios/`, driven by a single `demo.sh` CLI.
@@ -19,6 +23,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`kueue-preemption`](scenarios/kueue-preemption/README.md)  | A high-priority job **evicts** a running low-priority job to fit within quota. |
 | [`kueue-dra`](scenarios/kueue-dra/README.md)         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |
 | [`kueue-rayjob`](scenarios/kueue-rayjob/README.md)   | Kueue + **RayJob**: a whole Ray cluster (head + GPU worker) is gang-admitted under GPU quota; a 2nd RayJob stays Pending. |
+| [`kueue-jobset`](scenarios/kueue-jobset/README.md)   | Kueue + **JobSet**: a whole JobSet (all its child Jobs) is gang-admitted under GPU quota; a 2nd JobSet stays Pending. |
 | [`grove-podcliques`](scenarios/grove-podcliques/README.md)  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |
 
 Each scenario links to its own `README.md` above, describing exactly what it
@@ -53,8 +58,9 @@ Examples:
 ```
 
 The first scenario you run creates the cluster and installs cert-manager, LWS,
-and Kueue (with
-`fairSharing` enabled at the controller level) and the shared ResourceFlavors.
+and Kueue (with `fairSharing` enabled at the controller level) and the shared
+`gpu-flavor`. Scenarios that need extra operators (RayJob, JobSet, DRA, Grove)
+install them on demand via their `pre_run` hook and remove them in `post_run`.
 Subsequent runs reuse everything. Scenarios are isolated (separate namespaces,
 queues and priority classes), so you can run them in any order, though they all
 draw from the same 64 fake GPUs — `clean` one before running another if you want
@@ -100,7 +106,15 @@ scenarios/<name>/
 
 Set at the top of `lib/common.sh` (overridable via env):
 `KUEUE_VERSION`, `LWS_VERSION`, `CERT_MANAGER_VERSION`, `GROVE_VERSION`,
-`CLUSTER_NAME`.
+`KUBERAY_VERSION`, `JOBSET_VERSION`, `CLUSTER_NAME`.
+
+## CI
+
+`.github/workflows/scenarios.yml` runs **every scenario in parallel**, each in
+its own matrix job on its own kind cluster (full isolation, unlike the shared
+local cluster). The matrix is discovered dynamically from `scenarios/`, so new
+scenarios are picked up automatically. It runs on push, pull request, and
+manual `workflow_dispatch`.
 
 ## Cleanup
 

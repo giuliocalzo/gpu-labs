@@ -15,6 +15,7 @@ LWS_VERSION="${LWS_VERSION:-0.9.0}"
 CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-1.21.0}"
 GROVE_VERSION="${GROVE_VERSION:-0.1.0-alpha.11}"
 KUBERAY_VERSION="${KUBERAY_VERSION:-1.6.2}"
+JOBSET_VERSION="${JOBSET_VERSION:-0.12.0}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -212,6 +213,28 @@ uninstall_kuberay() {
   step "Uninstalling the KubeRay operator"
   helm_ctx uninstall kuberay-operator --namespace kuberay-system --ignore-not-found --wait || true
   kubectl_ctx delete namespace kuberay-system --ignore-not-found >/dev/null 2>&1 || true
+}
+
+# Install the JobSet operator via Helm (scenario-scoped, not part of install_base).
+# Idempotent via 'helm upgrade -i'. Kueue's jobset.x-k8s.io/jobset integration is
+# already enabled in base/kueue-values.yaml, so once this operator is present
+# Kueue can manage JobSets. certManager.enable=true reuses the base cert-manager
+# to provision the JobSet webhook certificate.
+install_jobset() {
+  step "Installing the JobSet operator (helm chart $JOBSET_VERSION)"
+  helm_ctx upgrade -i jobset oci://registry.k8s.io/jobset/charts/jobset \
+    --version="$JOBSET_VERSION" \
+    --namespace jobset-system \
+    --create-namespace \
+    --set certManager.enable=true \
+    --wait --timeout 300s
+}
+
+# Remove the JobSet operator installed by install_jobset.
+uninstall_jobset() {
+  step "Uninstalling the JobSet operator"
+  helm_ctx uninstall jobset --namespace jobset-system --ignore-not-found --wait || true
+  kubectl_ctx delete namespace jobset-system --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------
