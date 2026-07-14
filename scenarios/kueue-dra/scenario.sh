@@ -96,24 +96,10 @@ inspect() {
     | sed 's/^/    /' || echo "    (none)"
   echo
   echo "--- Why are the extra jobs pending? ---"
-  _show_first_pending_reason
+  show_first_pending_reason "$NS"
   echo
   info "Expect ${GPU_QUOTA} workloads Admitted (${GPU_QUOTA} devices claimed) and the rest"
   info "pending on quota, even though the driver advertises far more mock GPUs."
-}
-
-# Print the conditions of the first not-yet-admitted workload (the quota-blocked one).
-_show_first_pending_reason() {
-  local wl admitted
-  for wl in $(kubectl_ctx get workloads -n "$NS" -o name 2>/dev/null); do
-    admitted=$(kubectl_ctx get "$wl" -n "$NS" \
-      -o jsonpath='{.status.conditions[?(@.type=="Admitted")].status}' 2>/dev/null || true)
-    if [ "$admitted" != "True" ]; then
-      kubectl_ctx get "$wl" -n "$NS" \
-        -o jsonpath='{range .status.conditions[*]}{"    "}{.type}{": "}{.reason}{" - "}{.message}{"\n"}{end}'
-      return
-    fi
-  done
 }
 
 # post_run: remove the driver that pre_run installed (the scenario's queues and
