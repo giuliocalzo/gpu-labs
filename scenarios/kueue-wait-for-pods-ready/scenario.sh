@@ -8,30 +8,13 @@ NS="wait-ready"
 QUEUE="wait-ready-queue"
 CQ="wait-ready-cq"
 JOB="never-ready"
-WAIT_TIMEOUT="30s"       # must match waitForPodsReady.timeout in kueue-values.yaml
-KUEUE_CHART="oci://registry.k8s.io/kueue/charts/kueue"
-SCENARIO_VALUES="$SCENARIO_DIR/manifests/kueue-values.yaml"
-BASE_VALUES="$REPO_ROOT/base/kueue-values.yaml"
+# waitForPodsReady (timeout 120s) is enabled cluster-wide in base/kueue-values.yaml,
+# so this scenario just submits a gang that can never become Ready and observes
+# the eviction/requeue. No per-scenario Kueue config changes are needed.
+WAIT_TIMEOUT="120s"
 
 describe() {
   echo "waitForPodsReady: an admitted gang whose pods never become Ready is evicted and requeued"
-}
-
-# _kueue_upgrade <values-file> - re-apply the Kueue Helm release with a given
-# config and wait for the controller to roll out (config changes need a restart).
-_kueue_upgrade() {
-  helm_ctx upgrade kueue "$KUEUE_CHART" \
-    --version="$KUEUE_VERSION" \
-    --namespace kueue-system \
-    -f "$1" \
-    --wait --timeout 300s >/dev/null
-  kubectl_ctx -n kueue-system rollout status deploy/kueue-controller-manager --timeout=180s
-}
-
-# pre_run: turn on waitForPodsReady (scenario-scoped; cleanup restores base).
-pre_run() {
-  step "Enabling Kueue waitForPodsReady (timeout ${WAIT_TIMEOUT}) via helm upgrade"
-  _kueue_upgrade "$SCENARIO_VALUES"
 }
 
 # _requeue_count - how many times Kueue has requeued the workload so far.
@@ -49,9 +32,9 @@ apply() {
   apply_with_retry "$SCENARIO_DIR/manifests/job.yaml"
 
   info "workload is admitted immediately; its pods run but fail readiness..."
-  info "waiting for the ${WAIT_TIMEOUT} PodsReady timeout to evict + requeue the gang..."
+  info "waiting up to the ${WAIT_TIMEOUT} PodsReady timeout to evict + requeue the gang..."
   local i c
-  for i in $(seq 1 45); do
+  for i in $(seq 1 60); do   # up to ~180s: enough to pass the 120s timeout
     c=$(_requeue_count)
     [ "${c:-0}" -ge 1 ] && { info "observed requeue #$c"; break; }
     sleep 3
@@ -86,6 +69,4 @@ inspect() {
 cleanup() {
   kubectl_ctx delete ns "$NS" --ignore-not-found
   kubectl_ctx delete clusterqueue "$CQ" --ignore-not-found
-  step "Restoring base Kueue config (disabling waitForPodsReady)"
-  _kueue_upgrade "$BASE_VALUES"
 }

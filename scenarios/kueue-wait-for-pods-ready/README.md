@@ -14,13 +14,14 @@ letting a wedged job sit on GPUs forever.
 
 ## How it works
 
-- **Config (scenario-scoped)** — `waitForPodsReady` is **off by default** in this
-  lab (a short timeout would wrongly evict slow-starting workloads like
-  `kueue-rayjob`'s real image pulls). This scenario's `pre_run` does a
-  `helm upgrade` with `manifests/kueue-values.yaml` (base config **plus** a
-  `waitForPodsReady` block, `timeout: 30s`), and `cleanup` restores the base
-  config. In the v1beta2 config the feature is enabled by the block's presence —
-  there is no `enable` field, and `timeout` is required.
+- **Config (cluster-wide)** — `waitForPodsReady` is enabled for the whole lab in
+  `base/kueue-values.yaml` with `timeout: 120s`: short enough for a snappy demo,
+  yet still a 2-minute grace for slow-but-healthy workloads (e.g. `kueue-rayjob`'s
+  real `rayproject/ray` image pull), which `requeuingStrategy` would just requeue
+  if it ever tripped. In the v1beta2 config the feature is enabled by the block's
+  presence — there is no `enable` field, and `timeout` is required. This scenario
+  adds no Kueue config of its own; it just submits a gang that can never become
+  Ready.
 - **`manifests/queues.yaml`** — a ClusterQueue with room for exactly one 2-pod /
   16-GPU gang, so admission is instant and the demo is purely about readiness.
 - **`manifests/job.yaml`** — a 2-pod gang (each claiming a whole 8-GPU node)
@@ -33,13 +34,15 @@ letting a wedged job sit on GPUs forever.
 
 ```bash
 ./demo.sh kueue-wait-for-pods-ready
-# restores the base Kueue config on cleanup:
 ./demo.sh clean kueue-wait-for-pods-ready
 ```
 
+> `waitForPodsReady` uses a 2m timeout, so the eviction takes a couple minutes to
+> appear — the scenario waits for the first requeue before printing its report.
+
 ## What to look for
 
-- The Workload is admitted, then after ~30s its conditions flip to
+- The Workload is admitted, then after the ~2m `timeout` its conditions flip to
   `Evicted=True (PodsReadyTimeout)` and `PodsReady=False`, with
   `requeue count: 1` (and climbing on each retry).
 - An event `EvictedDueToPodsReadyTimeout` — *"Exceeded the PodsReady timeout"*.

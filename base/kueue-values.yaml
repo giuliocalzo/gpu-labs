@@ -57,6 +57,21 @@ managerConfig:
       - "deployment"
       - "statefulset"
       - "leaderworkerset.x-k8s.io/leaderworkerset"
+    # waitForPodsReady gives admitted Workloads time-based all-or-nothing
+    # semantics: if their pods don't all become Ready within `timeout`, the
+    # Workload is evicted and requeued (used by the kueue-wait-for-pods-ready
+    # scenario). Enabled by the presence of this block (v1beta2 has no "enable"
+    # field; `timeout` is required). The 120s timeout is short enough for a snappy
+    # demo yet still gives slow-but-healthy workloads (e.g. kueue-rayjob's real
+    # rayproject/ray image pull) a 2-minute grace; if one ever did trip it,
+    # requeuingStrategy just requeues it (up to backoffLimitCount) and it succeeds
+    # on the now-cached image. blockAdmission is left at its default (false) so a
+    # not-yet-ready Workload doesn't hold up admission for other queues.
+    waitForPodsReady:
+      timeout: 120s
+      requeuingStrategy:
+        timestamp: Eviction
+        backoffLimitCount: 100
     # Fair Sharing is enabled by the presence of this block (v1beta2 config has
     # no "enable" field - only preemptionStrategies).
     fairSharing:
