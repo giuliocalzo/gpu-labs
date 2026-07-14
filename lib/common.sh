@@ -123,7 +123,6 @@ install_cert_manager() {
     --namespace cert-manager \
     --create-namespace \
     --set crds.enabled=true \
-    --set webhook.enabled=false \
     --wait --timeout 300s
 }
 
