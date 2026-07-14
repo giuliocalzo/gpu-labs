@@ -29,6 +29,8 @@ _wait_for_group_workloads() {
 }
 
 apply() {
+  step "Applying the TAS Topology + topology-aware ResourceFlavor"
+  apply_with_retry "$SCENARIO_DIR/manifests/flavors.yaml"
   apply_with_retry "$SCENARIO_DIR/manifests/queues.yaml"
 
   step "Submitting two LWS groups (replicas: 2, size: 4 = a whole block each)"
@@ -68,4 +70,6 @@ cleanup() {
   kubectl_ctx delete -f "$SCENARIO_DIR/manifests/lws-overflow.yaml" --ignore-not-found
   kubectl_ctx delete -f "$SCENARIO_DIR/manifests/lws-groups.yaml" --ignore-not-found
   kubectl_ctx delete -f "$SCENARIO_DIR/manifests/queues.yaml" --ignore-not-found
+  # Delete the flavor/Topology after the ClusterQueue that references them.
+  kubectl_ctx delete -f "$SCENARIO_DIR/manifests/flavors.yaml" --ignore-not-found
 }

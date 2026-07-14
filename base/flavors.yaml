@@ -1,25 +1,6 @@
-# Shared, cluster-scoped Kueue building blocks used by every scenario.
-apiVersion: kueue.x-k8s.io/v1beta2
-kind: Topology
-metadata:
-  name: default
-spec:
-  levels:
-    - nodeLabel: cloud.provider.com/topology-block
-    - nodeLabel: cloud.provider.com/topology-rack
-    - nodeLabel: kubernetes.io/hostname
----
-# Topology-aware flavor (used by the TAS scenario).
-apiVersion: kueue.x-k8s.io/v1beta2
-kind: ResourceFlavor
-metadata:
-  name: tas-gpu-flavor
-spec:
-  nodeLabels:
-    cloud.provider.com/node-group: tas-group
-  topologyName: default
----
-# Plain flavor (used by the non-TAS scenarios so they don't get implicit TAS behavior).
+# Shared, cluster-scoped Kueue building block used by the non-TAS scenarios.
+# The topology-aware flavor + Topology are TAS-specific and live with the
+# kueue-tas scenario (scenarios/kueue-tas/manifests/flavors.yaml).
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata:
