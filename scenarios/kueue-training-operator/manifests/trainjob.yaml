@@ -1,0 +1,29 @@
+# A single Kubeflow Trainer V2 TrainJob modelling a tiny distributed training
+# run: 2 training nodes, each pod claiming a whole 8-GPU node (16 GPUs total).
+# It references the gpu-lab-pause ClusterTrainingRuntime. The scenario creates
+# this twice (generateName gives each a unique name).
+#
+# Kueue treats the WHOLE TrainJob (its 2 nodes = 16 GPUs) as one gang Workload
+# and controls spec.suspend: nothing starts until the entire gang fits in quota.
+apiVersion: trainer.kubeflow.org/v1alpha1
+kind: TrainJob
+metadata:
+  generateName: torch-
+  namespace: training
+  labels:
+    kueue.x-k8s.io/queue-name: training-queue
+spec:
+  # Start suspended; Kueue unsuspends the TrainJob once the gang is admitted.
+  suspend: true
+  runtimeRef:
+    apiGroup: trainer.kubeflow.org
+    kind: ClusterTrainingRuntime
+    name: gpu-lab-pause
+  trainer:
+    numNodes: 2
+    resourcesPerNode:
+      requests:
+        cpu: "50m"
+        nvidia.com/gpu: "8"
+      limits:
+        nvidia.com/gpu: "8"

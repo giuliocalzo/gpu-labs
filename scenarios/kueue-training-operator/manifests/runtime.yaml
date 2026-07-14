@@ -1,0 +1,35 @@
+# A ClusterTrainingRuntime is the reusable template a TrainJob points at via
+# runtimeRef. The official runtimes (e.g. torch-distributed) use a torch mlPolicy
+# that injects a `torchrun` command and a multi-GB pytorch image. For this
+# fake-GPU lab we want no real compute, so we define a minimal runtime with a
+# *plain* mlPolicy (just numNodes, no framework) - nothing overrides the
+# container command, so a `pause` placeholder simply runs and holds its GPU
+# reservation. The trainer controller fans the single "node" job out to numNodes
+# pods, each pinned to a whole 8-GPU node.
+apiVersion: trainer.kubeflow.org/v1alpha1
+kind: ClusterTrainingRuntime
+metadata:
+  name: gpu-lab-pause
+spec:
+  mlPolicy:
+    numNodes: 2
+  template:
+    spec:
+      replicatedJobs:
+        - name: node
+          template:
+            metadata:
+              labels:
+                trainer.kubeflow.org/trainjob-ancestor-step: trainer
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: node
+                      image: registry.k8s.io/pause:3.10
+                      resources:
+                        requests:
+                          cpu: "50m"
+                          nvidia.com/gpu: "8"
+                        limits:
+                          nvidia.com/gpu: "8"

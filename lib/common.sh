@@ -18,6 +18,7 @@ KUBERAY_VERSION="${KUBERAY_VERSION:-1.6.2}"
 JOBSET_VERSION="${JOBSET_VERSION:-0.12.0}"
 KAI_VERSION="${KAI_VERSION:-0.16.3}"
 VOLCANO_VERSION="${VOLCANO_VERSION:-1.15.0}"
+KUBEFLOW_TRAINER_VERSION="${KUBEFLOW_TRAINER_VERSION:-2.2.1}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -59,6 +60,22 @@ apply_with_retry() {
     sleep 5
   done
   die "failed to apply $f"
+}
+
+# create_with_retry <file> [attempts]  - like apply_with_retry, but uses
+# `kubectl create` instead of `apply`. Required for objects that rely on
+# metadata.generateName (RayJob/JobSet/TrainJob templates submitted N times),
+# which `apply` rejects because it needs a concrete name. Defaults to 12
+# attempts, 5s apart, to ride out a webhook still settling after a controller
+# restart. Each call creates a new, uniquely-named object.
+create_with_retry() {
+  local f="$1" attempts="${2:-12}" i
+  for i in $(seq 1 "$attempts"); do
+    kubectl_ctx create -f "$f" && return 0
+    info "webhook not ready yet, retrying in 5s (attempt $i/$attempts)"
+    sleep 5
+  done
+  die "failed to create $f"
 }
 
 # ---------------------------------------------------------------------------
@@ -294,6 +311,36 @@ uninstall_volcano() {
   step "Uninstalling Volcano"
   helm_ctx uninstall volcano --namespace volcano-system --ignore-not-found --wait || true
   kubectl_ctx delete namespace volcano-system --ignore-not-found >/dev/null 2>&1 || true
+}
+
+# Install Kubeflow Trainer V2 via Helm (scenario-scoped, not part of
+# install_base). Idempotent via 'helm upgrade -i'. This is the successor to the
+# v1 Training Operator: it ships the trainer.kubeflow.org CRDs (TrainJob,
+# ClusterTrainingRuntime, TrainingRuntime) and runs a TrainJob as a JobSet under
+# the hood - so the chart also bundles a jobset-controller as a subchart, all in
+# the "kubeflow-system" namespace. It self-manages its webhook TLS (no
+# cert-manager needed). Kueue's trainer.kubeflow.org/trainjob integration is
+# already enabled in base/kueue-values.yaml.
+#
+# Version note: Kueue v0.18.x unsuspends a TrainJob via the RuntimePatches API
+# (spec.runtimePatches), which only exists in Kubeflow Trainer >= v2.2. On v2.1
+# Kueue admits the Workload but can't unsuspend it ("kueue runtime patch not
+# found"), so the pods never start. Keep this pinned to >= 2.2.0.
+install_kubeflow_trainer() {
+  step "Installing Kubeflow Trainer (helm chart v${KUBEFLOW_TRAINER_VERSION})"
+  helm_ctx upgrade -i kubeflow-trainer oci://ghcr.io/kubeflow/charts/kubeflow-trainer \
+    --version="$KUBEFLOW_TRAINER_VERSION" \
+    --namespace kubeflow-system \
+    --create-namespace \
+    --wait --timeout 300s >/dev/null
+  kubectl_ctx -n kubeflow-system rollout status deploy/kubeflow-trainer-controller-manager --timeout=180s
+}
+
+# Remove Kubeflow Trainer installed by install_kubeflow_trainer.
+uninstall_kubeflow_trainer() {
+  step "Uninstalling Kubeflow Trainer"
+  helm_ctx uninstall kubeflow-trainer --namespace kubeflow-system --ignore-not-found --wait || true
+  kubectl_ctx delete namespace kubeflow-system --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------
