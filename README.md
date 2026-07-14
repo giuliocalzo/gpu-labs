@@ -46,7 +46,8 @@ Examples:
 ./demo.sh kueue-preemption
 ```
 
-The first scenario you run creates the cluster and installs LWS + Kueue (with
+The first scenario you run creates the cluster and installs cert-manager, LWS,
+and Kueue (with
 `fairSharing` enabled at the controller level) and the shared ResourceFlavors.
 Subsequent runs reuse everything. Scenarios are isolated (separate namespaces,
 queues and priority classes), so you can run them in any order, though they all
@@ -92,7 +93,7 @@ scenarios/<name>/
 ## Pinned versions
 
 Set at the top of `lib/common.sh` (overridable via env):
-`KUEUE_VERSION`, `LWS_VERSION`, `CLUSTER_NAME`.
+`KUEUE_VERSION`, `LWS_VERSION`, `CERT_MANAGER_VERSION`, `CLUSTER_NAME`.
 
 ## Cleanup
 

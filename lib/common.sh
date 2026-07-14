@@ -12,6 +12,7 @@ set -euo pipefail
 CLUSTER_NAME="${CLUSTER_NAME:-gpu-lab}"
 KUEUE_VERSION="${KUEUE_VERSION:-0.18.3}"
 LWS_VERSION="${LWS_VERSION:-0.9.0}"
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-1.21.0}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -104,6 +105,22 @@ patch_fake_gpus() {
   done
 }
 
+# Install cert-manager via Helm (skips if already present). The chart version
+# tag uses a leading "v"; CERT_MANAGER_VERSION is stored without it.
+install_cert_manager() {
+  if kubectl_ctx get deploy cert-manager -n cert-manager >/dev/null 2>&1; then
+    info "cert-manager already installed"
+    return
+  fi
+  step "Installing cert-manager (helm chart v${CERT_MANAGER_VERSION})"
+  helm_ctx install cert-manager oci://quay.io/jetstack/charts/cert-manager \
+    --version="v${CERT_MANAGER_VERSION}" \
+    --namespace cert-manager \
+    --create-namespace \
+    --set crds.enabled=true \
+    --wait --timeout 300s
+}
+
 # Install the LeaderWorkerSet controller via Helm (skips if already present).
 install_lws() {
   if kubectl_ctx get deploy lws-controller-manager -n lws-system >/dev/null 2>&1; then
@@ -134,11 +151,12 @@ install_kueue() {
     --wait --timeout 300s
 }
 
-# Bring the shared platform up end-to-end: cluster, fake GPUs, LWS, Kueue, and
-# the base ResourceFlavors/Topology every scenario builds on.
+# Bring the shared platform up end-to-end: cluster, fake GPUs, cert-manager,
+# LWS, Kueue, and the base ResourceFlavors/Topology every scenario builds on.
 install_base() {
   ensure_cluster
   patch_fake_gpus
+  install_cert_manager
   install_lws
   install_kueue
   step "Applying base ResourceFlavors + Topology"

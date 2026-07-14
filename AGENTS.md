@@ -40,7 +40,7 @@ functions. `demo.sh` calls them in this order:
 6. `cleanup` — remove the scenario's resources (used by `demo.sh clean`).
    **Optional but expected.**
 
-`install_base` (cluster + LWS + Kueue + `base/flavors.yaml`) runs before every
+`install_base` (cluster + cert-manager + LWS + Kueue + `base/flavors.yaml`) runs before every
 scenario, so hooks can assume the base is present.
 
 ## Hard rules
@@ -48,12 +48,13 @@ scenario, so hooks can assume the base is present.
 - **Always go through the context wrappers**: `kubectl_ctx` / `helm_ctx` (defined
   in `lib/common.sh`). Never call bare `kubectl`/`helm` — they must target the
   pinned `kind-${CLUSTER_NAME}` context.
-- **Install via Helm**, not raw manifests: LWS and Kueue are Helm charts
-  (`install_lws` / `install_kueue`). Kueue config (fair sharing, DRA gate,
-  integrations) lives in `base/kueue-values.yaml`.
+- **Install via Helm**, not raw manifests: cert-manager, LWS, and Kueue are Helm
+  charts (`install_cert_manager` / `install_lws` / `install_kueue`). Kueue config
+  (fair sharing, DRA gate, integrations) lives in `base/kueue-values.yaml`.
 - **Pinned versions** live at the top of `lib/common.sh` (`KUEUE_VERSION`,
-  `LWS_VERSION`, `CLUSTER_NAME`) and are **stored without a leading `v`** (the
-  Helm `--version` flags use them directly).
+  `LWS_VERSION`, `CERT_MANAGER_VERSION`, `CLUSTER_NAME`) and are **stored without
+  a leading `v`** (the Helm `--version` flags use them directly; cert-manager's
+  chart tag is prefixed with `v` in `install_cert_manager`).
 - **Fake GPUs**: use the extended resource `nvidia.com/gpu`; nodes are patched to
   `8` each (64 total). Reuse the shared `gpu_job` builder in `lib/common.sh` for
   pause-pod jobs.
