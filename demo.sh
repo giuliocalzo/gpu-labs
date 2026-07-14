@@ -43,18 +43,31 @@ EOF
 run_scenario() {
   local name="$1" dir="$SCENARIOS_DIR/$1"
   [ -f "$dir/scenario.sh" ] || { echo "Unknown scenario: '$name'"; echo; usage; exit 1; }
+  # Drop any hook definitions left over so an undefined hook in this scenario
+  # doesn't accidentally run a previous scenario's function.
+  unset -f pre_run post_run 2>/dev/null || true
   install_base
   # shellcheck disable=SC1090
   source "$dir/scenario.sh"
+  # Optional pre_run hook: install prerequisites the scenario needs (e.g. a driver).
+  if declare -F pre_run >/dev/null; then
+    step "Pre-run setup: $name"
+    pre_run
+  fi
   step "Running scenario: $name"
   apply
   echo
   step "Inspection: $name"
   inspect
+  # Optional post_run hook: tear down anything pre_run installed but the demo
+  # doesn't need to leave behind.
+  if declare -F post_run >/dev/null; then
+    echo
+    step "Post-run teardown: $name"
+    post_run
+  fi
   echo
   step "Scenario '$name' complete."
-  info "Re-run './demo.sh $name' anytime to re-apply & re-inspect."
-  info "Remove it with './demo.sh clean $name'; tear down all with './demo.sh down'."
 }
 
 clean_scenario() {

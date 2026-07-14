@@ -23,6 +23,8 @@ REPO_ROOT="$(cd "$LIB_DIR/.." && pwd)"
 kubectl_ctx() { command kubectl --context "${KUBE_CONTEXT}" "$@"; }
 helm_ctx()    { command helm --kube-context "${KUBE_CONTEXT}" "$@"; }
 
+# Logging helpers (color-coded): step = section header, info = indented detail,
+# warn = highlighted warning, die = print error and exit non-zero.
 step() { printf "\n\033[1;34m==> %s\033[0m\n" "$*"; }
 info() { printf "    %s\n" "$*"; }
 warn() { printf "\033[1;33m    %s\033[0m\n" "$*"; }
@@ -55,11 +57,14 @@ apply_with_retry() {
 # ---------------------------------------------------------------------------
 # Cluster + base install (shared by every scenario)
 # ---------------------------------------------------------------------------
+# Create the kind cluster from the checked-in topology config.
 _create_cluster() {
   kind create cluster --name "$CLUSTER_NAME" \
     --config "$REPO_ROOT/cluster/kind-cluster.yaml"
 }
 
+# Verify required tools/daemon, then create the cluster if missing (or rebuild it
+# when FORCE_RECREATE is set) and confirm it is reachable.
 ensure_cluster() {
   step "Ensuring kind cluster '$CLUSTER_NAME' (1 control-plane + 8 workers)"
   local bin
@@ -81,6 +86,8 @@ ensure_cluster() {
   kubectl_ctx cluster-info >/dev/null
 }
 
+# Patch each worker's status to advertise 8 fake nvidia.com/gpu (no real GPUs
+# needed). Idempotent: skips nodes that already report the capacity.
 patch_fake_gpus() {
   step "Advertising fake accelerators (nvidia.com/gpu: 8) on each worker"
   local workers node cur
@@ -97,6 +104,7 @@ patch_fake_gpus() {
   done
 }
 
+# Install the LeaderWorkerSet controller via Helm (skips if already present).
 install_lws() {
   if kubectl_ctx get deploy lws-controller-manager -n lws-system >/dev/null 2>&1; then
     info "LeaderWorkerSet already installed"
@@ -111,6 +119,8 @@ install_lws() {
     --wait --timeout 300s
 }
 
+# Install Kueue via Helm using base/kueue-values.yaml (fair sharing + DRA
+# integration). Skips if already present.
 install_kueue() {
   if kubectl_ctx get deploy kueue-controller-manager -n kueue-system >/dev/null 2>&1; then
     info "Kueue already installed"
@@ -124,6 +134,8 @@ install_kueue() {
     --wait --timeout 300s
 }
 
+# Bring the shared platform up end-to-end: cluster, fake GPUs, LWS, Kueue, and
+# the base ResourceFlavors/Topology every scenario builds on.
 install_base() {
   ensure_cluster
   patch_fake_gpus
@@ -172,9 +184,20 @@ spec:
 EOF
 }
 
+# submit_gpu_jobs <ns> <queue> <name-prefix> <count> <gpus> [workload-priority-class]
+# Applies <count> suspended GPU jobs named <prefix>-1 .. <prefix>-<count>.
+submit_gpu_jobs() {
+  local ns="$1" queue="$2" prefix="$3" count="$4" gpus="$5" prio="${6:-}" i
+  for i in $(seq 1 "$count"); do
+    gpu_job "$ns" "$queue" "${prefix}-${i}" "$gpus" "$prio"
+  done | kubectl_ctx apply -f -
+}
+
 # ---------------------------------------------------------------------------
 # Generic inspection helpers (scenarios compose these)
 # ---------------------------------------------------------------------------
+# inspect_workloads <ns> - table of Workloads with queue, priority, and the
+# QuotaReserved/Admitted condition status.
 inspect_workloads() {
   local ns="$1"
   echo "--- Workloads in '$ns' (priority / reserved / admitted) ---"
@@ -187,6 +210,8 @@ inspect_workloads() {
     || echo "  (none)"
 }
 
+# inspect_pod_topology <ns> - show where each pod landed (LWS group, block, rack,
+# node), sorted by block/rack to make topology co-location visible.
 inspect_pod_topology() {
   local ns="$1"
   echo "--- Pod placement by topology in '$ns' ---"
@@ -201,6 +226,8 @@ inspect_pod_topology() {
       done | sort -k3,3 -k4,4
 }
 
+# inspect_clusterqueue_usage <cq> - pending/admitted/reserving counts plus the
+# per-flavor reserved resource totals for a ClusterQueue.
 inspect_clusterqueue_usage() {
   local cq="$1"
   echo "--- ClusterQueue '$cq' ---"
@@ -213,6 +240,7 @@ inspect_clusterqueue_usage() {
     -o jsonpath='{range .status.flavorsReservation[*]}{"    reserved "}{.name}{": "}{range .resources[*]}{.name}{"="}{.total}{" "}{end}{"\n"}{end}' 2>/dev/null || true
 }
 
+# inspect_pending_pods <ns> - list pods still in Pending (i.e. gated by Kueue).
 inspect_pending_pods() {
   local ns="$1"
   echo "Pods not yet scheduled (gated by Kueue):"

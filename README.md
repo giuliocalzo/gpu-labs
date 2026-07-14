@@ -17,7 +17,10 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | `kueue-fair-sharing`| Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
 | `workload-priority` | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
 | `kueue-preemption`  | A high-priority job **evicts** a running low-priority job to fit within quota. |
-| `kueue-dra`         | Documented **stub** for Dynamic Resource Allocation (needs feature gates + a driver). See `scenarios/kueue-dra/README.md`. |
+| `kueue-dra`         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |
+
+Each scenario has its own `scenarios/<name>/README.md` describing exactly what
+it tests, how it's wired, and what to look for.
 
 ## Prerequisites
 
@@ -82,7 +85,7 @@ lib/common.sh           # shared helpers: install, workload/job builders, inspec
 cluster/kind-cluster.yaml   # 1 control-plane + 8 labelled workers
 base/flavors.yaml       # shared Topology + ResourceFlavors
 scenarios/<name>/
-  scenario.sh           # describe / apply / inspect / cleanup hooks
+  scenario.sh           # hooks: describe / apply / inspect / cleanup (+ optional pre_run / post_run)
   manifests/*.yaml      # scenario-specific Kueue objects & workloads
 ```
 

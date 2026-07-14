@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dra
+---
+# Quota for the logical "nvidia.com/gpu" resource, which the Kueue config maps
+# from the gpu.nvidia.com DeviceClass. We deliberately cap it at 4 (well below
+# the 64 mock devices the driver advertises) to show that Kueue's quota - not the
+# physical device count - is what gates admission.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: dra-cluster-queue
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["cpu", "nvidia.com/gpu"]
+      flavors:
+        - name: gpu-flavor
+          resources:
+            - name: cpu
+              nominalQuota: "100"
+            - name: nvidia.com/gpu
+              nominalQuota: "4"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  namespace: dra
+  name: dra-local-queue
+spec:
+  clusterQueue: dra-cluster-queue
+---
+# Each pod that references this template gets its own ResourceClaim for one GPU
+# from the gpu.nvidia.com DeviceClass.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  namespace: dra
+  name: single-gpu
+spec:
+  spec:
+    devices:
+      requests:
+      - name: gpu
+        exactly:
+          deviceClassName: gpu.nvidia.com
+          count: 1

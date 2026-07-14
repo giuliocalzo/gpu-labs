@@ -1,53 +1,47 @@
-# DRA scenario (stub)
+# kueue-dra scenario
 
-Dynamic Resource Allocation (DRA) lets workloads request devices through the
-`resource.k8s.io` API (DeviceClasses / ResourceClaims) instead of the classic
-extended-resource counter (`nvidia.com/gpu`). Kueue can quota and admit these
-claims, but the plumbing is heavier than the other scenarios, so this folder is
-a documented stub rather than a live demo.
+Shows Kueue putting **Dynamic Resource Allocation (DRA)** devices under quota.
+Instead of requesting the classic extended resource (`nvidia.com/gpu`), pods
+request devices through the `resource.k8s.io` API (a `ResourceClaimTemplate`
+referencing a `DeviceClass`), and Kueue accounts for them in a ClusterQueue.
 
-## Why it can't just run on the shared cluster
+## Why this one works on the shared cluster
 
-The other scenarios only need Kueue objects + jobs, which we can apply on the
-fly. DRA instead needs changes baked into the cluster at creation time plus an
-external driver.
+The cluster runs Kubernetes v1.35, where **core DRA is GA and enabled by
+default** (`resource.k8s.io/v1` is served) - so no cluster-creation feature
+gates or rebuild are needed. We only add:
 
-## What a real DRA demo requires
-
-1. **Cluster feature gates (recreate the cluster).** Add to
-   `cluster/kind-cluster.yaml`:
-
-   ```yaml
-   featureGates:
-     DynamicResourceAllocation: true
-   runtimeConfig:
-     "resource.k8s.io/v1beta1": "true"
-   kubeadmConfigPatches:
-     - |
-       kind: ClusterConfiguration
-       apiServer:
-         extraArgs:
-           runtime-config: "resource.k8s.io/v1beta1=true"
-       scheduler:
-         extraArgs:
-           feature-gates: "DynamicResourceAllocation=true"
-   ```
-
-   Then rebuild with `FORCE_RECREATE=1 ./demo.sh dra`.
-
-2. **A DRA driver.** Install a driver that publishes `ResourceSlice`s and a
-   `DeviceClass`, e.g. the upstream
+1. **A DRA driver** - the upstream
    [dra-example-driver](https://github.com/kubernetes-sigs/dra-example-driver)
-   or the NVIDIA GPU DRA driver.
+   deployed from its published image (`manifests/driver.yaml`). It advertises 8
+   *simulated* GPUs per worker via `ResourceSlice`s (no real hardware). We wrap
+   them in a `gpu.nvidia.com` `DeviceClass` whose selector still matches the
+   example driver's real (hardcoded) driver name, `gpu.example.com`.
+2. **Kueue DRA integration** - the `KueueDRAIntegration` feature gate plus a
+   `deviceClassMappings` entry mapping `gpu.nvidia.com` → the logical quota
+   resource `nvidia.com/gpu`. Both live in `base/kueue-values.yaml`, so they're
+   part of the normal Kueue install (inert for the other scenarios).
 
-3. **Kueue DRA support.** Enable the relevant Kueue feature gate and map the
-   `DeviceClass` into a ClusterQueue's covered resources so claims consume quota.
+## What it demonstrates
 
-4. **Workloads that use a claim.** A Job referencing a `ResourceClaimTemplate`
-   instead of requesting `nvidia.com/gpu`.
+- A `ClusterQueue` grants `nvidia.com/gpu: 4`, while the driver advertises 64
+  mock devices. Six 1-GPU jobs are submitted: Kueue admits 4 and leaves 2
+  **Pending on quota** - proving Kueue's quota, not the physical device count,
+  gates admission.
+- Admitted pods get real `ResourceClaim`s allocated by the kube-scheduler and
+  run; you can see the claims and the published `ResourceSlice`s.
 
-## Status
+## Run
 
-Left as a stub on purpose: it needs real (or emulated) DRA drivers to be
-meaningful, and mixing DRA feature gates into the shared cluster would change
-the baseline for every other scenario.
+```bash
+./demo.sh kueue-dra
+./demo.sh clean kueue-dra
+```
+
+## Quota accounting path
+
+This uses Kueue's **ResourceClaimTemplate** path (beta since Kueue v0.18), which
+needs `deviceClassMappings`. The alternative **extended-resource** path (request
+`nvidia.com/gpu` directly, backed by a `DeviceClass.spec.extendedResourceName`)
+is alpha and additionally needs the Kubernetes `DRAExtendedResource` gate (beta
+in 1.36), so it isn't used here.

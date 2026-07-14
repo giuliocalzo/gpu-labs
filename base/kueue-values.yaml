@@ -6,6 +6,14 @@
 # includes "leaderworkerset.x-k8s.io/leaderworkerset" (needed by the TAS
 # scenario). If you bump KUEUE_VERSION, re-diff against:
 #   helm show values oci://registry.k8s.io/kueue/charts/kueue --version <v>
+
+# Enable Kueue's DRA integration (used by the kueue-dra scenario). Inert for the
+# other scenarios - it only matters once a mapped DeviceClass + claims exist.
+controllerManager:
+  featureGates:
+  - name: KueueDRAIntegration
+    enabled: true
+
 managerConfig:
   controllerManagerConfigYaml: |-
     apiVersion: config.kueue.x-k8s.io/v1beta2
@@ -55,3 +63,11 @@ managerConfig:
       preemptionStrategies:
       - LessThanOrEqualToFinalShare
       - LessThanInitialShare
+    # DRA: map the DeviceClass to a logical quota resource so the kueue-dra
+    # scenario can put DRA devices under ClusterQueue quota. Inert until the
+    # "gpu.nvidia.com" DeviceClass and matching claims exist.
+    resources:
+      deviceClassMappings:
+      - name: nvidia.com/gpu
+        deviceClassNames:
+        - gpu.nvidia.com
