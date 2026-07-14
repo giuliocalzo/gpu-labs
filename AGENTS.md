@@ -49,10 +49,8 @@ before every scenario, so hooks can assume the base is present.
   in `lib/common.sh`). Never call bare `kubectl`/`helm` — they must target the
   pinned `kind-${CLUSTER_NAME}` context.
 - **Install via Helm**, not raw manifests: cert-manager, LWS, and Kueue are Helm
-  charts (`install_cert_manager` / `install_lws` / `install_kueue`). cert-manager
-  is installed with its webhook disabled (`webhook.enabled=false`) since nothing
-  in the lab submits cert-manager CRs. Kueue config (fair sharing, DRA gate,
-  integrations) lives in `base/kueue-values.yaml`.
+  charts (`install_cert_manager` / `install_lws` / `install_kueue`). Kueue config
+  (fair sharing, DRA gate, integrations) lives in `base/kueue-values.yaml`.
 - **Pinned versions** live at the top of `lib/common.sh` (`KUEUE_VERSION`,
   `LWS_VERSION`, `CERT_MANAGER_VERSION`, `GROVE_VERSION`, `CLUSTER_NAME`) and are
   **stored without a leading `v`** (the Helm `--version` flags use them directly;
