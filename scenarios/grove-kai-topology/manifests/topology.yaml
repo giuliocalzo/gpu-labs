@@ -1,0 +1,58 @@
+---
+# KAI's view of the cluster hierarchy: block -> rack -> host, built from the
+# node labels our kind cluster already carries (see cluster/kind-cluster.yaml).
+# The name must match the PodCliqueSet's topologyConstraint.topologyName: Grove
+# passes that name straight through to KAI as the topology reference.
+apiVersion: kai.scheduler/v1alpha1
+kind: Topology
+metadata:
+  name: gpu-lab-topology
+spec:
+  levels:
+    - nodeLabel: cloud.provider.com/topology-block
+    - nodeLabel: cloud.provider.com/topology-rack
+    - nodeLabel: kubernetes.io/hostname
+---
+# Grove's source-of-truth topology. It names the domains (block/rack/host) that
+# a PodCliqueSet's topologyConstraint refers to, maps each to a node-label key,
+# and binds them to the KAI Topology above so Grove translates the constraint
+# into KAI's PodGang topology terms.
+apiVersion: grove.io/v1alpha1
+kind: ClusterTopologyBinding
+metadata:
+  name: gpu-lab-topology
+spec:
+  levels:
+    - domain: block
+      key: cloud.provider.com/topology-block
+    - domain: rack
+      key: cloud.provider.com/topology-rack
+    - domain: host
+      key: kubernetes.io/hostname
+  schedulerTopologyBindings:
+    - schedulerName: kai-scheduler
+      topologyReference: gpu-lab-topology
+---
+# KAI queue hierarchy the Grove pods run under (label kai.scheduler/queue).
+# quota: -1 means "no reservation, best-effort" - we only need scheduling to
+# work, not quota gating (that is what the kueue-* scenarios show).
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: grove-root
+spec:
+  resources:
+    cpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: grove-queue
+spec:
+  parentQueue: grove-root
+  resources:
+    cpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }

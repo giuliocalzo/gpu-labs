@@ -16,6 +16,7 @@ CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-1.21.0}"
 GROVE_VERSION="${GROVE_VERSION:-0.1.0-alpha.11}"
 KUBERAY_VERSION="${KUBERAY_VERSION:-1.6.2}"
 JOBSET_VERSION="${JOBSET_VERSION:-0.12.0}"
+KAI_VERSION="${KAI_VERSION:-0.16.3}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -125,7 +126,7 @@ install_cert_manager() {
     --namespace cert-manager \
     --create-namespace \
     --set crds.enabled=true \
-    --wait --timeout 300s
+    --wait --timeout 300s >/dev/null
 }
 
 # Install the LeaderWorkerSet controller via Helm (skips if already present).
@@ -174,12 +175,18 @@ install_base() {
 # Idempotent via 'helm upgrade -i'. The chart ships its own CRDs and the operator
 # self-manages its webhook TLS, so no extra prerequisites are needed. The chart
 # version tag uses a leading "v"; GROVE_VERSION is stored without it.
+# Topology Aware Scheduling is always enabled
+# (config.topologyAwareScheduling.enabled=true): it is required before a
+# PodCliqueSet may carry a topologyConstraint, and it is harmless for the plain
+# grove-podcliques baseline (which simply doesn't set any constraint). The
+# kai-scheduler backend profile is already enabled by the chart's defaults.
 install_grove() {
   step "Installing the Grove operator (helm chart v${GROVE_VERSION})"
   helm_ctx upgrade -i grove oci://ghcr.io/ai-dynamo/grove/grove-charts \
     --version="v${GROVE_VERSION}" \
     --namespace grove-system \
     --create-namespace \
+    --set "config.topologyAwareScheduling.enabled=true" \
     --wait --timeout 300s
   # The operator bootstraps its own webhook TLS and restarts once on first
   # install; wait for it to settle so the admission webhook is actually serving.
@@ -235,6 +242,34 @@ uninstall_jobset() {
   step "Uninstalling the JobSet operator"
   helm_ctx uninstall jobset --namespace jobset-system --ignore-not-found --wait || true
   kubectl_ctx delete namespace jobset-system --ignore-not-found >/dev/null 2>&1 || true
+}
+
+# Install the NVIDIA KAI Scheduler via Helm (scenario-scoped, not part of
+# install_base). Idempotent via 'helm upgrade -i'. KAI understands Grove
+# PodGangs natively (its PodGrouper has a Grove plugin), so it can gang-schedule
+# and topology-place the workloads the grove scenarios create.
+#
+# Two flags matter for this fake-GPU kind lab:
+#   global.gpuSharing=false                  - we request whole nvidia.com/gpu
+#     units, not fractions, so KAI's GPU-sharing machinery stays off.
+#   admission.gpuFractionRuntimeClassName=null - there is no NVIDIA GPU-Operator
+#     here (fake GPUs), so KAI must not require its runtime class on GPU pods.
+install_kai() {
+  step "Installing the KAI Scheduler (helm chart v${KAI_VERSION})"
+  helm_ctx upgrade -i kai-scheduler oci://ghcr.io/kai-scheduler/kai-scheduler/kai-scheduler \
+    --version="v${KAI_VERSION}" \
+    --namespace kai-scheduler \
+    --create-namespace \
+    --set "global.gpuSharing=false" \
+    --set "admission.gpuFractionRuntimeClassName=null" \
+    --wait --timeout 300s >/dev/null
+}
+
+# Remove the KAI Scheduler installed by install_kai.
+uninstall_kai() {
+  step "Uninstalling the KAI Scheduler"
+  helm_ctx uninstall kai-scheduler --namespace kai-scheduler --ignore-not-found --wait || true
+  kubectl_ctx delete namespace kai-scheduler --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,114 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: grove-kai
+---
+# Same disaggregated LLM inference stack as the grove-podcliques baseline, but
+# wired to the KAI Scheduler:
+#   - every clique pod sets schedulerName: kai-scheduler
+#   - every clique carries the KAI queue label (kai.scheduler/queue)
+#   - the prefill scaling group adds a topologyConstraint so KAI packs it into a
+#     single block (preferring a rack) using the cluster's block/rack labels.
+apiVersion: grove.io/v1alpha1
+kind: PodCliqueSet
+metadata:
+  name: llm-inference
+  namespace: grove-kai
+  labels:
+    app: llm-inference
+spec:
+  replicas: 1
+  template:
+    cliqueStartupType: CliqueStartupTypeExplicit
+    cliques:
+      # Router / frontend: CPU-only, starts first.
+      - name: frontend
+        labels:
+          kai.scheduler/queue: grove-queue
+        spec:
+          roleName: frontend
+          replicas: 1
+          podSpec:
+            schedulerName: kai-scheduler
+            containers:
+              - name: frontend
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+      # Prefill leader: one whole 8-GPU node, starts after the frontend.
+      - name: prefill-leader
+        labels:
+          kai.scheduler/queue: grove-queue
+        spec:
+          roleName: prefill-leader
+          startsAfter:
+            - frontend
+          replicas: 1
+          podSpec:
+            schedulerName: kai-scheduler
+            containers:
+              - name: prefill-leader
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+                    nvidia.com/gpu: "8"
+                  limits:
+                    nvidia.com/gpu: "8"
+      # Prefill workers: two whole 8-GPU nodes, start after the frontend.
+      - name: prefill-worker
+        labels:
+          kai.scheduler/queue: grove-queue
+        spec:
+          roleName: prefill-worker
+          startsAfter:
+            - frontend
+          replicas: 2
+          podSpec:
+            schedulerName: kai-scheduler
+            containers:
+              - name: prefill-worker
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+                    nvidia.com/gpu: "8"
+                  limits:
+                    nvidia.com/gpu: "8"
+      # Decode: two whole 8-GPU nodes, start only after prefill is up.
+      - name: decode
+        labels:
+          kai.scheduler/queue: grove-queue
+        spec:
+          roleName: decode
+          startsAfter:
+            - prefill-leader
+            - prefill-worker
+          replicas: 2
+          podSpec:
+            schedulerName: kai-scheduler
+            containers:
+              - name: decode
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+                    nvidia.com/gpu: "8"
+                  limits:
+                    nvidia.com/gpu: "8"
+    # Prefill leader + workers form one tightly-coupled gang (24 GPUs = 3 nodes).
+    # required=block keeps the gang inside one block (32 GPUs / 4 nodes); it
+    # cannot fit one rack (16 GPUs / 2 nodes), so preferred=rack packs as tightly
+    # as it can within that block.
+    podCliqueScalingGroups:
+      - name: prefill
+        cliqueNames:
+          - prefill-leader
+          - prefill-worker
+        topologyConstraint:
+          topologyName: gpu-lab-topology
+          pack:
+            required: block
+            preferred: rack
