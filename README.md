@@ -13,15 +13,16 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 
 | Scenario            | What it shows |
 |---------------------|---------------|
-| `kueue-tas`         | Topology-Aware Scheduling: LWS groups co-locate, falling back rack → block; a 3rd group is quota-blocked and stays Pending. |
-| `kueue-fair-sharing`| Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
-| `kueue-workload-priority` | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
-| `kueue-preemption`  | A high-priority job **evicts** a running low-priority job to fit within quota. |
-| `kueue-dra`         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |
-| `grove-podcliques`  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |
+| [`kueue-tas`](scenarios/kueue-tas/README.md)         | Topology-Aware Scheduling: LWS groups co-locate, falling back rack → block; a 3rd group is quota-blocked and stays Pending. |
+| [`kueue-fair-sharing`](scenarios/kueue-fair-sharing/README.md)| Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
+| [`kueue-workload-priority`](scenarios/kueue-workload-priority/README.md) | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
+| [`kueue-preemption`](scenarios/kueue-preemption/README.md)  | A high-priority job **evicts** a running low-priority job to fit within quota. |
+| [`kueue-dra`](scenarios/kueue-dra/README.md)         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |
+| [`kueue-rayjob`](scenarios/kueue-rayjob/README.md)   | Kueue + **RayJob**: a whole Ray cluster (head + GPU worker) is gang-admitted under GPU quota; a 2nd RayJob stays Pending. |
+| [`grove-podcliques`](scenarios/grove-podcliques/README.md)  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |
 
-Each scenario has its own `scenarios/<name>/README.md` describing exactly what
-it tests, how it's wired, and what to look for.
+Each scenario links to its own `README.md` above, describing exactly what it
+tests, how it's wired, and what to look for.
 
 > Not every scenario is about Kueue. The lab is a general Kubernetes demo
 > cluster: `grove-podcliques`, for example, showcases NVIDIA Grove and installs
@@ -89,7 +90,7 @@ time-slicing) works by advertising more integer units per node.
 demo.sh                 # CLI dispatcher
 lib/common.sh           # shared helpers: install, workload/job builders, inspectors
 cluster/kind-cluster.yaml   # 1 control-plane + 8 labelled workers
-base/flavors.yaml       # shared Topology + ResourceFlavors
+base/flavors.yaml       # shared gpu-flavor (TAS Topology/flavor live with kueue-tas)
 scenarios/<name>/
   scenario.sh           # hooks: describe / apply / inspect / cleanup (+ optional pre_run / post_run)
   manifests/*.yaml      # scenario-specific Kueue objects & workloads

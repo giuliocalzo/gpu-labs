@@ -19,7 +19,7 @@ demo.sh                   # CLI: run <scenario> | list | clean <scenario> | down
 lib/common.sh             # shared helpers: install, job builder, inspectors
 cluster/kind-cluster.yaml # 1 control-plane + 8 labelled workers (cluster name: gpu-lab)
 base/
-  flavors.yaml            # shared Topology + ResourceFlavors
+  flavors.yaml            # shared gpu-flavor (TAS Topology/flavor live in kueue-tas)
   kueue-values.yaml       # Kueue Helm values (fairSharing + DRA integration)
 scenarios/<name>/
   scenario.sh             # hook functions (see contract below)
