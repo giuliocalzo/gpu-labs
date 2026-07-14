@@ -15,7 +15,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 |---------------------|---------------|
 | `kueue-tas`         | Topology-Aware Scheduling: LWS groups co-locate, falling back rack → block; a 3rd group is quota-blocked and stays Pending. |
 | `kueue-fair-sharing`| Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
-| `workload-priority` | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
+| `kueue-workload-priority` | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
 | `kueue-preemption`  | A high-priority job **evicts** a running low-priority job to fit within quota. |
 | `kueue-dra`         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |
 | `grove-podcliques`  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |

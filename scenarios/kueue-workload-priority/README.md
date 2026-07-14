@@ -1,4 +1,4 @@
-# workload-priority scenario
+# kueue-workload-priority scenario
 
 Tests Kueue **WorkloadPriorityClass** controlling the *order* of admission when
 quota is scarce - without preempting anything already running.
@@ -26,8 +26,8 @@ quota is scarce - without preempting anything already running.
 ## Run
 
 ```bash
-./demo.sh workload-priority
-./demo.sh clean workload-priority
+./demo.sh kueue-workload-priority
+./demo.sh clean kueue-workload-priority
 ```
 
 ## What to look for

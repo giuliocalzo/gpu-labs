@@ -8,7 +8,7 @@ lower-priority one to fit within the same ClusterQueue's quota.
 - With the queue already full of low-priority work, submitting high-priority
   workloads causes Kueue to **evict (preempt) running low-priority workloads**
   to make room.
-- This is the active counterpart to `workload-priority`: there the queue starts
+- This is the active counterpart to `kueue-workload-priority`: there the queue starts
   empty and priority only sets admission *order*; here priority causes *eviction*
   of already-admitted work.
 
