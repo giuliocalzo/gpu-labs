@@ -22,12 +22,12 @@ apply() {
          plus DeviceClass + ResourceClaimTemplate objects, and workloads that
          reference the claim instead of nvidia.com/gpu.
 
-    See scenarios/dra/README.md for the full enablement plan.
+    See scenarios/kueue-dra/README.md for the full enablement plan.
 EOF
 }
 
 inspect() {
-  info "Nothing to inspect - DRA scenario is a stub. See scenarios/dra/README.md."
+  info "Nothing to inspect - DRA scenario is a stub. See scenarios/kueue-dra/README.md."
 }
 
 cleanup() {

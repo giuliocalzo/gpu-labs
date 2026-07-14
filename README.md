@@ -13,16 +13,16 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 
 | Scenario            | What it shows |
 |---------------------|---------------|
-| `tas`               | Topology-Aware Scheduling: LWS groups co-locate, falling back rack → block; a 3rd group is quota-blocked and stays Pending. |
-| `fair-sharing`      | Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
+| `kueue-tas`         | Topology-Aware Scheduling: LWS groups co-locate, falling back rack → block; a 3rd group is quota-blocked and stays Pending. |
+| `kueue-fair-sharing`| Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
 | `workload-priority` | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
-| `preemption`        | A high-priority job **evicts** a running low-priority job to fit within quota. |
-| `dra`               | Documented **stub** for Dynamic Resource Allocation (needs feature gates + a driver). See `scenarios/dra/README.md`. |
+| `kueue-preemption`  | A high-priority job **evicts** a running low-priority job to fit within quota. |
+| `kueue-dra`         | Documented **stub** for Dynamic Resource Allocation (needs feature gates + a driver). See `scenarios/kueue-dra/README.md`. |
 
 ## Prerequisites
 
 - Docker (running)
-- [kind](https://kind.sigs.k8s.io/) and `kubectl` in your `PATH`
+- [kind](https://kind.sigs.k8s.io/), `kubectl`, and `helm` in your `PATH`
 - ~9 containers' worth of resources (1 control-plane + 8 workers)
 
 ## Usage
@@ -38,9 +38,9 @@ FORCE_RECREATE=1 ./demo.sh <scenario>   # rebuild the cluster first
 Examples:
 
 ```bash
-./demo.sh tas
-./demo.sh fair-sharing
-./demo.sh preemption
+./demo.sh kueue-tas
+./demo.sh kueue-fair-sharing
+./demo.sh kueue-preemption
 ```
 
 The first scenario you run creates the cluster and installs LWS + Kueue (with
@@ -95,5 +95,5 @@ Set at the top of `lib/common.sh` (overridable via env):
 
 ```bash
 ./demo.sh clean <scenario>          # just one scenario
-kind delete cluster --name kueue-tas-demo   # or: ./demo.sh down
+kind delete cluster --name gpu-lab          # or: ./demo.sh down
 ```

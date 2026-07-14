@@ -1,6 +1,6 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: kueue-tas-demo
+name: gpu-lab
 # Every worker carries:
 #   - the TAS topology labels (block / rack) + the ResourceFlavor selector
 #   - the common nvidia.com/* labels that GPU Feature Discovery would apply on a

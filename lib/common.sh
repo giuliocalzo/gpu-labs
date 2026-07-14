@@ -9,9 +9,9 @@ _KUEUE_LIB_LOADED=1
 set -euo pipefail
 
 # ---- Pinned versions / config (override via env) ----
-CLUSTER_NAME="${CLUSTER_NAME:-kueue-tas-demo}"
-KUEUE_VERSION="${KUEUE_VERSION:-v0.18.3}"
-LWS_VERSION="${LWS_VERSION:-v0.9.0}"
+CLUSTER_NAME="${CLUSTER_NAME:-gpu-lab}"
+KUEUE_VERSION="${KUEUE_VERSION:-0.18.3}"
+LWS_VERSION="${LWS_VERSION:-0.9.0}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -63,7 +63,7 @@ _create_cluster() {
 ensure_cluster() {
   step "Ensuring kind cluster '$CLUSTER_NAME' (1 control-plane + 8 workers)"
   local bin
-  for bin in docker kind kubectl; do
+  for bin in docker kind kubectl helm; do
     command -v "$bin" >/dev/null 2>&1 || die "'$bin' not found in PATH"
   done
   docker info >/dev/null 2>&1 || die "docker daemon is not running"
@@ -102,53 +102,28 @@ install_lws() {
     info "LeaderWorkerSet already installed"
     return
   fi
-  step "Installing LeaderWorkerSet $LWS_VERSION"
-  kubectl_ctx apply --server-side -f \
-    "https://github.com/kubernetes-sigs/lws/releases/download/${LWS_VERSION}/manifests.yaml"
-  kubectl_ctx wait deploy/lws-controller-manager -n lws-system \
-    --for=condition=available --timeout=300s
+  local chart_version="${LWS_VERSION#v}"  # chart wants 0.9.0, LWS_VERSION is v0.9.0
+  step "Installing LeaderWorkerSet $LWS_VERSION (helm chart $chart_version)"
+  helm_ctx install lws oci://registry.k8s.io/lws/charts/lws \
+    --version="$chart_version" \
+    --namespace lws-system \
+    --create-namespace \
+    --set enableDisaggregatedSet=true \
+    --wait --timeout 300s
 }
 
 install_kueue() {
   if kubectl_ctx get deploy kueue-controller-manager -n kueue-system >/dev/null 2>&1; then
     info "Kueue already installed"
-  else
-    step "Installing Kueue $KUEUE_VERSION"
-    kubectl_ctx apply --server-side -f \
-      "https://github.com/kubernetes-sigs/kueue/releases/download/${KUEUE_VERSION}/manifests.yaml"
-    kubectl_ctx wait deploy/kueue-controller-manager -n kueue-system \
-      --for=condition=available --timeout=300s
-  fi
-  enable_fair_sharing
-}
-
-# Fair sharing is a controller-level setting. Append it to the Kueue manager
-# config (preserving defaults) and restart, unless it's already enabled.
-enable_fair_sharing() {
-  local cfg tmp
-  cfg=$(kubectl_ctx get cm kueue-manager-config -n kueue-system \
-    -o jsonpath='{.data.controller_manager_config\.yaml}' 2>/dev/null || true)
-  [ -n "$cfg" ] || { warn "kueue-manager-config not found; skipping fairSharing enable"; return; }
-  if printf '%s' "$cfg" | grep -q 'fairSharing:'; then
-    info "Kueue fairSharing already enabled"
     return
   fi
-  step "Enabling Kueue fairSharing (controller-level)"
-  tmp=$(mktemp)
-  printf '%s\n' "$cfg" > "$tmp"
-  cat >> "$tmp" <<'EOF'
-fairSharing:
-  enable: true
-  preemptionStrategies:
-  - LessThanOrEqualToFinalShare
-  - LessThanInitialShare
-EOF
-  kubectl_ctx create cm kueue-manager-config -n kueue-system \
-    --from-file=controller_manager_config.yaml="$tmp" --dry-run=client -o yaml \
-    | kubectl_ctx apply -f -
-  rm -f "$tmp"
-  kubectl_ctx rollout restart deploy/kueue-controller-manager -n kueue-system
-  kubectl_ctx rollout status deploy/kueue-controller-manager -n kueue-system --timeout=180s
+  local chart_version="${KUEUE_VERSION#v}"  # chart wants 0.18.3, KUEUE_VERSION is v0.18.3
+  step "Installing Kueue $KUEUE_VERSION (helm chart $chart_version, fairSharing enabled via values)"
+  helm_ctx install kueue oci://registry.k8s.io/kueue/charts/kueue \
+    --version="$chart_version" \
+    --create-namespace --namespace=kueue-system \
+    -f "$REPO_ROOT/base/kueue-values.yaml" \
+    --wait --timeout 300s
 }
 
 install_base() {

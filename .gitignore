@@ -5,3 +5,6 @@
 # Local kubeconfig exports if any
 *.kubeconfig
 kubeconfig
+
+# Superpowers working docs (brainstorming specs / plans)
+docs/superpowers/
