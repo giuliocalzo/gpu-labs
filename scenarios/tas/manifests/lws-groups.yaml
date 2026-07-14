@@ -1,12 +1,12 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: lws-overflow
-  namespace: kueue-demo
+  name: lws-groups
+  namespace: tas
   labels:
     kueue.x-k8s.io/queue-name: tas-local-queue
 spec:
-  replicas: 1
+  replicas: 2
   leaderWorkerTemplate:
     size: 4
     leaderTemplate:

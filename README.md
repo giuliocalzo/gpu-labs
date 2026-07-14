@@ -1,22 +1,56 @@
-# kueue-demo-lab: LeaderWorkerSet + Kueue + Topology-Aware Scheduling on kind
+# kueue-demo-lab: a multi-scenario Kueue lab on kind
 
-A self-contained local lab that shows how **LeaderWorkerSet (LWS)**, **Kueue**, and
-**Topology-Aware Scheduling (TAS)** fit together. It stands up every resource needed —
-there is **no real workload** (all pods are `pause` placeholders) and **no real GPU**
-(each node advertises **8** fake `nvidia.com/gpu`, like a real 8-GPU node).
+A self-contained local lab that shows how **Kueue** wires together with
+**LeaderWorkerSet (LWS)** and its scheduling features. Everything runs on a
+single **kind** cluster; there is **no real workload** (all pods are `pause`
+placeholders) and **no real GPU** (each worker advertises **8** fake
+`nvidia.com/gpu`, like a real 8-GPU node).
 
-## What it demonstrates
+One shared cluster hosts several independent scenarios, each in its own folder
+under `scenarios/`, driven by a single `demo.sh` CLI.
 
-- Kueue admission via a ClusterQueue/LocalQueue and a TAS-enabled ResourceFlavor.
-- LWS groups admitted as a unit by Kueue.
-- TAS co-location: each pod claims a whole 8-GPU node (canonical multinode serving),
-  so a size-4 group needs 4 nodes. A 2-node rack can't hold it, so TAS falls back to a
-  **block** (4 nodes) and all 4 pods land in the same block. Two groups fill the two
-  blocks.
-- Admission gating: a third group would exceed the `nvidia.com/gpu` quota (64) and the
-  available capacity, so it stays **Pending**.
+## Scenarios
 
-## Topology
+| Scenario            | What it shows |
+|---------------------|---------------|
+| `tas`               | Topology-Aware Scheduling: LWS groups co-locate, falling back rack → block; a 3rd group is quota-blocked and stays Pending. |
+| `fair-sharing`      | Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
+| `workload-priority` | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
+| `preemption`        | A high-priority job **evicts** a running low-priority job to fit within quota. |
+| `dra`               | Documented **stub** for Dynamic Resource Allocation (needs feature gates + a driver). See `scenarios/dra/README.md`. |
+
+## Prerequisites
+
+- Docker (running)
+- [kind](https://kind.sigs.k8s.io/) and `kubectl` in your `PATH`
+- ~9 containers' worth of resources (1 control-plane + 8 workers)
+
+## Usage
+
+```bash
+./demo.sh list                # list available scenarios
+./demo.sh <scenario>          # ensure cluster + base install, then run & inspect
+./demo.sh clean <scenario>    # remove a scenario's resources (keep the cluster)
+./demo.sh down                # delete the kind cluster
+FORCE_RECREATE=1 ./demo.sh <scenario>   # rebuild the cluster first
+```
+
+Examples:
+
+```bash
+./demo.sh tas
+./demo.sh fair-sharing
+./demo.sh preemption
+```
+
+The first scenario you run creates the cluster and installs LWS + Kueue (with
+`fairSharing` enabled at the controller level) and the shared ResourceFlavors.
+Subsequent runs reuse everything. Scenarios are isolated (separate namespaces,
+queues and priority classes), so you can run them in any order, though they all
+draw from the same 64 fake GPUs — `clean` one before running another if you want
+a clean slate.
+
+## Topology (shared cluster)
 
 ```
 block-1                          block-2
@@ -26,61 +60,40 @@ block-1                          block-2
 8 nodes x 8 GPUs = 64 GPUs total   (rack = 16, block = 32)
 ```
 
+Every worker also carries the common `nvidia.com/*` labels GPU Feature Discovery
+would apply on a real 8× H100 node (inert here — no device plugin — but makes the
+nodes look realistic).
+
 ## About GPU requests
 
-The pods request a whole node's worth of GPUs (`nvidia.com/gpu: 8`), mirroring
+Pods request a whole node's worth of GPUs (`nvidia.com/gpu: 8`), mirroring
 multinode inference/training where each pod pins to one 8-GPU node.
 
 `nvidia.com/gpu` is a Kubernetes *extended resource*, scheduled in whole-integer
-units, so a pod **can** request just a portion of a node instead (e.g. `2` of `8`, so
-4 pods share a node). You cannot request fractional units (`0.5`); real sub-GPU
-sharing (MIG / time-slicing) works by advertising more integer units per node.
+units, so a pod **can** request just a portion of a node (e.g. `2` of `8`).
+Fractional units (`0.5`) are not allowed; real sub-GPU sharing (MIG /
+time-slicing) works by advertising more integer units per node.
 
-## Prerequisites
+## Layout
 
-- Docker (running)
-- [kind](https://kind.sigs.k8s.io/) and `kubectl` in your `PATH`
-- ~9 containers' worth of resources (1 control-plane + 8 workers)
-
-## Run
-
-```bash
-./run.sh
+```
+demo.sh                 # CLI dispatcher
+lib/common.sh           # shared helpers: install, workload/job builders, inspectors
+cluster/kind-cluster.yaml   # 1 control-plane + 8 labelled workers
+base/flavors.yaml       # shared Topology + ResourceFlavors
+scenarios/<name>/
+  scenario.sh           # describe / apply / inspect / cleanup hooks
+  manifests/*.yaml      # scenario-specific Kueue objects & workloads
 ```
 
-The script narrates each step: preflight → create cluster → advertise fake GPUs →
-install LWS → install Kueue → apply TAS resources → submit two groups → submit the
-overflow group → inspection.
+## Pinned versions
 
-If the cluster already exists, `run.sh` reuses it. To delete and rebuild it (so
-changes to `kind/kind-cluster.yaml`, e.g. node labels, take effect):
-
-```bash
-FORCE_RECREATE=1 ./run.sh
-```
-
-Pinned versions live at the top of `run.sh` (`KUEUE_VERSION`, `LWS_VERSION`,
-`CLUSTER_NAME`).
-
-## What to look for
-
-- **Workloads**: the two `lws-groups` workloads show `ADMITTED: True`; the
-  `lws-overflow` workload does not.
-- **Pod placement**: every pod in a group shares the same `BLOCK`, and the two groups
-  use different blocks.
-- **ClusterQueue**: `nvidia.com/gpu` reserved is `64` (fully used); the overflow
-  workload's condition explains it is waiting for quota.
-
-## Re-inspect later
-
-```bash
-kubectl get workloads -n kueue-demo
-kubectl get pods -n kueue-demo -o wide
-kubectl describe clusterqueue tas-cluster-queue
-```
+Set at the top of `lib/common.sh` (overridable via env):
+`KUEUE_VERSION`, `LWS_VERSION`, `CLUSTER_NAME`.
 
 ## Cleanup
 
 ```bash
-kind delete cluster --name kueue-tas-demo
+./demo.sh clean <scenario>          # just one scenario
+kind delete cluster --name kueue-tas-demo   # or: ./demo.sh down
 ```
