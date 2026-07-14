@@ -102,10 +102,9 @@ install_lws() {
     info "LeaderWorkerSet already installed"
     return
   fi
-  local chart_version="${LWS_VERSION#v}"  # chart wants 0.9.0, LWS_VERSION is v0.9.0
-  step "Installing LeaderWorkerSet $LWS_VERSION (helm chart $chart_version)"
+  step "Installing LeaderWorkerSet (helm chart $LWS_VERSION)"
   helm_ctx install lws oci://registry.k8s.io/lws/charts/lws \
-    --version="$chart_version" \
+    --version="$LWS_VERSION" \
     --namespace lws-system \
     --create-namespace \
     --set enableDisaggregatedSet=true \
@@ -117,10 +116,9 @@ install_kueue() {
     info "Kueue already installed"
     return
   fi
-  local chart_version="${KUEUE_VERSION#v}"  # chart wants 0.18.3, KUEUE_VERSION is v0.18.3
-  step "Installing Kueue $KUEUE_VERSION (helm chart $chart_version, fairSharing enabled via values)"
+  step "Installing Kueue (helm chart $KUEUE_VERSION, fairSharing enabled via values)"
   helm_ctx install kueue oci://registry.k8s.io/kueue/charts/kueue \
-    --version="$chart_version" \
+    --version="$KUEUE_VERSION" \
     --create-namespace --namespace=kueue-system \
     -f "$REPO_ROOT/base/kueue-values.yaml" \
     --wait --timeout 300s
