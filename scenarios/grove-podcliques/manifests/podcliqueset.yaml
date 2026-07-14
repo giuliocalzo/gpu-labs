@@ -1,0 +1,94 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: grove
+---
+# One high-level PodCliqueSet describing a disaggregated LLM inference stack.
+# Grove's operator expands this single object into PodCliques (one per role),
+# a PodCliqueScalingGroup (the prefill gang), a PodGang, and the pods.
+#
+# cliqueStartupType: Explicit makes Grove honour the startsAfter ordering:
+#   frontend  ->  prefill-leader + prefill-worker  ->  decode
+apiVersion: grove.io/v1alpha1
+kind: PodCliqueSet
+metadata:
+  name: llm-inference
+  namespace: grove
+  labels:
+    app: llm-inference
+spec:
+  replicas: 1
+  template:
+    cliqueStartupType: CliqueStartupTypeExplicit
+    cliques:
+      # Router / frontend: CPU-only, starts first.
+      - name: frontend
+        spec:
+          roleName: frontend
+          replicas: 1
+          podSpec:
+            containers:
+              - name: frontend
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+      # Prefill leader: one whole 8-GPU node, starts after the frontend.
+      - name: prefill-leader
+        spec:
+          roleName: prefill-leader
+          startsAfter:
+            - frontend
+          replicas: 1
+          podSpec:
+            containers:
+              - name: prefill-leader
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+                    nvidia.com/gpu: "8"
+                  limits:
+                    nvidia.com/gpu: "8"
+      # Prefill workers: two whole 8-GPU nodes, start after the frontend.
+      - name: prefill-worker
+        spec:
+          roleName: prefill-worker
+          startsAfter:
+            - frontend
+          replicas: 2
+          podSpec:
+            containers:
+              - name: prefill-worker
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+                    nvidia.com/gpu: "8"
+                  limits:
+                    nvidia.com/gpu: "8"
+      # Decode: two whole 8-GPU nodes, start only after prefill is up.
+      - name: decode
+        spec:
+          roleName: decode
+          startsAfter:
+            - prefill-leader
+            - prefill-worker
+          replicas: 2
+          podSpec:
+            containers:
+              - name: decode
+                image: registry.k8s.io/pause:3.10
+                resources:
+                  requests:
+                    cpu: "100m"
+                    nvidia.com/gpu: "8"
+                  limits:
+                    nvidia.com/gpu: "8"
+    # Prefill leader + workers form one tightly-coupled gang that scales together.
+    podCliqueScalingGroups:
+      - name: prefill
+        cliqueNames:
+          - prefill-leader
+          - prefill-worker

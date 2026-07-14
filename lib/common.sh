@@ -13,6 +13,7 @@ CLUSTER_NAME="${CLUSTER_NAME:-gpu-lab}"
 KUEUE_VERSION="${KUEUE_VERSION:-0.18.3}"
 LWS_VERSION="${LWS_VERSION:-0.9.0}"
 CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-1.21.0}"
+GROVE_VERSION="${GROVE_VERSION:-0.1.0-alpha.11}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -44,12 +45,13 @@ wait_for_count() {
   die "timed out waiting for $want $kind object(s)"
 }
 
-# apply_with_retry <file>  - tolerate the Kueue webhook not being ready yet.
+# apply_with_retry <file> [attempts]  - tolerate an admission webhook (Kueue,
+# Grove, ...) not being ready yet. Defaults to 6 attempts, 5s apart.
 apply_with_retry() {
-  local f="$1" i
-  for i in 1 2 3 4 5 6; do
+  local f="$1" attempts="${2:-6}" i
+  for i in $(seq 1 "$attempts"); do
     kubectl_ctx apply -f "$f" && return 0
-    info "webhook not ready yet, retrying in 5s (attempt $i)"
+    info "webhook not ready yet, retrying in 5s (attempt $i/$attempts)"
     sleep 5
   done
   die "failed to apply $f"
@@ -106,18 +108,22 @@ patch_fake_gpus() {
 }
 
 # Install cert-manager via Helm (skips if already present). The chart version
-# tag uses a leading "v"; CERT_MANAGER_VERSION is stored without it.
+# tag uses a leading "v"; CERT_MANAGER_VERSION is stored without it. The
+# validating/mutating webhook is disabled (webhook.enabled=false): nothing in
+# this lab submits cert-manager CRs through the API, so the webhook is dead
+# weight - Kueue and LWS manage their own webhook TLS internally.
 install_cert_manager() {
   if kubectl_ctx get deploy cert-manager -n cert-manager >/dev/null 2>&1; then
     info "cert-manager already installed"
     return
   fi
-  step "Installing cert-manager (helm chart v${CERT_MANAGER_VERSION})"
+  step "Installing cert-manager (helm chart v${CERT_MANAGER_VERSION}, webhook disabled)"
   helm_ctx install cert-manager oci://quay.io/jetstack/charts/cert-manager \
     --version="v${CERT_MANAGER_VERSION}" \
     --namespace cert-manager \
     --create-namespace \
     --set crds.enabled=true \
+    --set webhook.enabled=false \
     --wait --timeout 300s
 }
 
@@ -161,6 +167,29 @@ install_base() {
   install_kueue
   step "Applying base ResourceFlavors + Topology"
   apply_with_retry "$REPO_ROOT/base/flavors.yaml"
+}
+
+# Install the Grove operator via Helm (scenario-scoped, not part of install_base).
+# Idempotent via 'helm upgrade -i'. The chart ships its own CRDs and the operator
+# self-manages its webhook TLS, so no extra prerequisites are needed. The chart
+# version tag uses a leading "v"; GROVE_VERSION is stored without it.
+install_grove() {
+  step "Installing the Grove operator (helm chart v${GROVE_VERSION})"
+  helm_ctx upgrade -i grove oci://ghcr.io/ai-dynamo/grove/grove-charts \
+    --version="v${GROVE_VERSION}" \
+    --namespace grove-system \
+    --create-namespace \
+    --wait --timeout 300s
+  # The operator bootstraps its own webhook TLS and restarts once on first
+  # install; wait for it to settle so the admission webhook is actually serving.
+  kubectl_ctx -n grove-system rollout status deploy/grove-operator --timeout=120s
+}
+
+# Remove the Grove operator installed by install_grove.
+uninstall_grove() {
+  step "Uninstalling the Grove operator"
+  helm_ctx uninstall grove --namespace grove-system --ignore-not-found --wait || true
+  kubectl_ctx delete namespace grove-system --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------

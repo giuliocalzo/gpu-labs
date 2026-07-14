@@ -18,9 +18,14 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | `workload-priority` | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
 | `kueue-preemption`  | A high-priority job **evicts** a running low-priority job to fit within quota. |
 | `kueue-dra`         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |
+| `grove-podcliques`  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |
 
 Each scenario has its own `scenarios/<name>/README.md` describing exactly what
 it tests, how it's wired, and what to look for.
+
+> Not every scenario is about Kueue. The lab is a general Kubernetes demo
+> cluster: `grove-podcliques`, for example, showcases NVIDIA Grove and installs
+> its own operator via the scenario's `pre_run`/`post_run` hooks.
 
 ## Prerequisites
 
@@ -46,8 +51,8 @@ Examples:
 ./demo.sh kueue-preemption
 ```
 
-The first scenario you run creates the cluster and installs cert-manager, LWS,
-and Kueue (with
+The first scenario you run creates the cluster and installs cert-manager (with
+its webhook disabled), LWS, and Kueue (with
 `fairSharing` enabled at the controller level) and the shared ResourceFlavors.
 Subsequent runs reuse everything. Scenarios are isolated (separate namespaces,
 queues and priority classes), so you can run them in any order, though they all
@@ -93,7 +98,8 @@ scenarios/<name>/
 ## Pinned versions
 
 Set at the top of `lib/common.sh` (overridable via env):
-`KUEUE_VERSION`, `LWS_VERSION`, `CERT_MANAGER_VERSION`, `CLUSTER_NAME`.
+`KUEUE_VERSION`, `LWS_VERSION`, `CERT_MANAGER_VERSION`, `GROVE_VERSION`,
+`CLUSTER_NAME`.
 
 ## Cleanup
 
