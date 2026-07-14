@@ -14,6 +14,7 @@ KUEUE_VERSION="${KUEUE_VERSION:-0.18.3}"
 LWS_VERSION="${LWS_VERSION:-0.9.0}"
 CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-1.21.0}"
 GROVE_VERSION="${GROVE_VERSION:-0.1.0-alpha.11}"
+KUBERAY_VERSION="${KUBERAY_VERSION:-1.6.2}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -157,14 +158,14 @@ install_kueue() {
 }
 
 # Bring the shared platform up end-to-end: cluster, fake GPUs, cert-manager,
-# LWS, Kueue, and the base ResourceFlavors/Topology every scenario builds on.
+# LWS, Kueue, and the shared gpu-flavor every non-TAS scenario builds on.
 install_base() {
   ensure_cluster
   patch_fake_gpus
   install_cert_manager
   install_lws
   install_kueue
-  step "Applying base ResourceFlavors + Topology"
+  step "Applying the shared ResourceFlavor (base/flavors.yaml)"
   apply_with_retry "$REPO_ROOT/base/flavors.yaml"
 }
 
@@ -189,6 +190,28 @@ uninstall_grove() {
   step "Uninstalling the Grove operator"
   helm_ctx uninstall grove --namespace grove-system --ignore-not-found --wait || true
   kubectl_ctx delete namespace grove-system --ignore-not-found >/dev/null 2>&1 || true
+}
+
+# Install the KubeRay operator via Helm (scenario-scoped, not part of install_base).
+# Idempotent via 'helm upgrade -i'. Kueue's ray.io/rayjob integration is already
+# enabled in base/kueue-values.yaml, so once this operator is present Kueue can
+# manage RayJobs.
+install_kuberay() {
+  step "Installing the KubeRay operator (helm chart $KUBERAY_VERSION)"
+  helm_ctx repo add kuberay https://ray-project.github.io/kuberay-helm/ >/dev/null 2>&1 || true
+  helm_ctx repo update kuberay >/dev/null 2>&1 || true
+  helm_ctx upgrade -i kuberay-operator kuberay/kuberay-operator \
+    --version="$KUBERAY_VERSION" \
+    --namespace kuberay-system \
+    --create-namespace \
+    --wait --timeout 300s
+}
+
+# Remove the KubeRay operator installed by install_kuberay.
+uninstall_kuberay() {
+  step "Uninstalling the KubeRay operator"
+  helm_ctx uninstall kuberay-operator --namespace kuberay-system --ignore-not-found --wait || true
+  kubectl_ctx delete namespace kuberay-system --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------
@@ -302,6 +325,21 @@ show_workload_reason() {
     kubectl_ctx get "$wl" -n "$ns" \
       -o jsonpath='{range .status.conditions[*]}{"    "}{.type}{": "}{.reason}{" - "}{.message}{"\n"}{end}'
   fi
+}
+
+# show_first_pending_reason <ns> - print the conditions of the first workload in
+# the namespace that is not yet Admitted (i.e. the quota-blocked one).
+show_first_pending_reason() {
+  local ns="$1" wl admitted
+  for wl in $(kubectl_ctx get workloads -n "$ns" -o name 2>/dev/null); do
+    admitted=$(kubectl_ctx get "$wl" -n "$ns" \
+      -o jsonpath='{.status.conditions[?(@.type=="Admitted")].status}' 2>/dev/null || true)
+    if [ "$admitted" != "True" ]; then
+      kubectl_ctx get "$wl" -n "$ns" \
+        -o jsonpath='{range .status.conditions[*]}{"    "}{.type}{": "}{.reason}{" - "}{.message}{"\n"}{end}'
+      return
+    fi
+  done
 }
 
 # count_admitted <ns>  -> number of workloads with Admitted=True

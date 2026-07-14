@@ -1,0 +1,75 @@
+# A single RayJob template. The scenario creates it twice (generateName gives
+# each a unique name). Kueue treats each RayJob's whole Ray cluster (head +
+# worker) as one gang Workload and controls spec.suspend.
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  generateName: rayjob-
+  namespace: rayjob
+  labels:
+    kueue.x-k8s.io/queue-name: rayjob-queue
+spec:
+  # Kueue-managed RayJobs must clean up their cluster when done.
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 10
+  # Start suspended; Kueue unsuspends once the gang is admitted within quota.
+  suspend: true
+  # Short-lived entrypoint: keep the cluster busy long enough to observe the
+  # second RayJob staying Pending, then finish so quota is released.
+  entrypoint: |
+    python -c "
+    import time, ray
+    ray.init()
+    for i in range(180):
+        print(f'iter {i}: {ray.cluster_resources()}')
+        time.sleep(1)
+    "
+  rayClusterSpec:
+    rayVersion: "2.52.0"
+    headGroupSpec:
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.52.0
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: "2Gi"
+                limits:
+                  cpu: "1"
+                  memory: "5Gi"
+    workerGroupSpecs:
+      - groupName: gpu-workers
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 1
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: rayproject/ray:2.52.0
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh", "-c", "ray stop"]
+                # The worker claims a whole 8-GPU node - this is what the
+                # ClusterQueue's nvidia.com/gpu: 8 quota gates on.
+                resources:
+                  requests:
+                    cpu: "1"
+                    memory: "1Gi"
+                    nvidia.com/gpu: "8"
+                  limits:
+                    cpu: "1"
+                    memory: "1Gi"
+                    nvidia.com/gpu: "8"
