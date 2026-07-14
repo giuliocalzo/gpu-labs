@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wait-ready
+---
+# Quota for exactly one 2-pod / 16-GPU gang, so the single job below is admitted
+# immediately and the demo is purely about pod readiness, not quota contention.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: wait-ready-cq
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["cpu", "nvidia.com/gpu"]
+      flavors:
+        - name: gpu-flavor
+          resources:
+            - name: cpu
+              nominalQuota: "100"
+            - name: nvidia.com/gpu
+              nominalQuota: "16"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  namespace: wait-ready
+  name: wait-ready-queue
+spec:
+  clusterQueue: wait-ready-cq
