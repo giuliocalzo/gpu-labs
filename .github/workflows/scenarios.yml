@@ -1,0 +1,104 @@
+name: scenarios
+
+# Run every scenario in parallel, each in its own job on its own kind cluster.
+# Isolating scenarios per runner keeps them independent and lets them run fully
+# concurrently (unlike the shared local cluster used by ./demo.sh).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scenarios-${{ github.ref }}
+  cancel-in-progress: true
+
+# Pinned toolchain (kind version fixes the default Kubernetes node image, so the
+# whole matrix is reproducible). Bump deliberately.
+env:
+  KIND_VERSION: v0.30.0
+  KUBECTL_VERSION: v1.34.0
+  HELM_VERSION: v3.17.3
+
+jobs:
+  discover:
+    name: discover scenarios
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.list.outputs.scenarios }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        name: Build scenario matrix
+        run: |
+          set -euo pipefail
+          scenarios=$(
+            for d in scenarios/*/; do
+              [ -f "${d}scenario.sh" ] && basename "$d"
+            done | jq -R -s -c 'split("\n") | map(select(length > 0))'
+          )
+          echo "Discovered: $scenarios"
+          echo "scenarios=$scenarios" >> "$GITHUB_OUTPUT"
+
+  run:
+    name: ${{ matrix.scenario }}
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJson(needs.discover.outputs.scenarios) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Install kind
+        run: |
+          set -euo pipefail
+          curl -fsSLo ./kind \
+            "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind version
+
+      - name: Run scenario ${{ matrix.scenario }}
+        run: ./demo.sh "${{ matrix.scenario }}"
+
+      - name: Dump cluster diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          CTX=kind-gpu-lab
+          echo "::group::nodes"
+          kubectl --context "$CTX" get nodes -o wide
+          echo "::endgroup::"
+          echo "::group::pods (all namespaces)"
+          kubectl --context "$CTX" get pods -A -o wide
+          echo "::endgroup::"
+          echo "::group::workloads (all namespaces)"
+          kubectl --context "$CTX" get workloads -A
+          echo "::endgroup::"
+          echo "::group::clusterqueues"
+          kubectl --context "$CTX" get clusterqueues
+          echo "::endgroup::"
+          echo "::group::recent events"
+          kubectl --context "$CTX" get events -A --sort-by=.lastTimestamp | tail -50
+          echo "::endgroup::"
+
+      - name: Tear down the kind cluster
+        if: always()
+        run: ./demo.sh down || true
