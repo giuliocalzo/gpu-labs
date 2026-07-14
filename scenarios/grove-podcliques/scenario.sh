@@ -52,6 +52,8 @@ inspect() {
   echo
   echo "--- PodGang (scheduler-facing gang Grove generated) ---"
   kubectl_ctx get "$PODGANG_KIND" -n "$NS" 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+  info "(PodGang stays Pending here: the default scheduler placed the pods but"
+  info " doesn't advance PodGang phase - that needs a gang-aware scheduler like KAI.)"
   echo
   echo "--- Pods (placement across the fake-GPU nodes) ---"
   kubectl_ctx get pods -n "$NS" \
