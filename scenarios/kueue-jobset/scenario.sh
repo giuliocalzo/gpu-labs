@@ -79,12 +79,12 @@ inspect() {
   info "and the second JobSet's Workload Pending on quota, with no child Jobs created for it."
 }
 
-# post_run: remove the JobSet operator that pre_run installed.
-post_run() {
-  step "Removing the JobSets and the JobSet operator"
-  kubectl_ctx delete jobsets --all -n "$NS" --ignore-not-found
-  uninstall_jobset
-}
+# # post_run: remove the JobSet operator that pre_run installed.
+# post_run() {
+#   step "Removing the JobSets and the JobSet operator"
+#   kubectl_ctx delete jobsets --all -n "$NS" --ignore-not-found
+#   uninstall_jobset
+# }
 
 cleanup() {
   kubectl_ctx delete jobsets --all -n "$NS" --ignore-not-found 2>/dev/null || true

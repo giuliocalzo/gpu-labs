@@ -78,12 +78,12 @@ inspect() {
   info "and the second RayJob's Workload Pending on quota, with no pods created for it."
 }
 
-# post_run: remove the KubeRay operator that pre_run installed.
-post_run() {
-  step "Removing the RayJobs and the KubeRay operator"
-  kubectl_ctx delete rayjobs --all -n "$NS" --ignore-not-found
-  uninstall_kuberay
-}
+# # post_run: remove the KubeRay operator that pre_run installed.
+# post_run() {
+#   step "Removing the RayJobs and the KubeRay operator"
+#   kubectl_ctx delete rayjobs --all -n "$NS" --ignore-not-found
+#   uninstall_kuberay
+# }
 
 cleanup() {
   kubectl_ctx delete rayjobs --all -n "$NS" --ignore-not-found 2>/dev/null || true

@@ -102,12 +102,12 @@ inspect() {
   info "pending on quota, even though the driver advertises far more mock GPUs."
 }
 
-# post_run: remove the driver that pre_run installed (the scenario's queues and
-# jobs are left in place for inspection and are removed by cleanup()).
-post_run() {
-  step "Removing the DRA example driver (installed by pre_run)"
-  kubectl_ctx delete -f "$SCENARIO_DIR/manifests/driver.yaml" --ignore-not-found
-}
+# # post_run: remove the driver that pre_run installed (the scenario's queues and
+# # jobs are left in place for inspection and are removed by cleanup()).
+# post_run() {
+#   step "Removing the DRA example driver (installed by pre_run)"
+#   kubectl_ctx delete -f "$SCENARIO_DIR/manifests/driver.yaml" --ignore-not-found
+# }
 
 cleanup() {
   kubectl_ctx delete -f "$SCENARIO_DIR/manifests/queues.yaml" --ignore-not-found

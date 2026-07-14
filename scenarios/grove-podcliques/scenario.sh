@@ -64,13 +64,13 @@ inspect() {
   info "started in order: frontend -> prefill (leader+workers) -> decode."
 }
 
-# post_run: remove the workload and the operator that pre_run installed, so the
-# shared cluster returns to baseline (same pattern as the DRA driver).
-post_run() {
-  step "Removing the Grove workload"
-  kubectl_ctx delete -f "$MANIFEST" --ignore-not-found
-  uninstall_grove
-}
+# # post_run: remove the workload and the operator that pre_run installed, so the
+# # shared cluster returns to baseline (same pattern as the DRA driver).
+# post_run() {
+#   step "Removing the Grove workload"
+#   kubectl_ctx delete -f "$MANIFEST" --ignore-not-found
+#   uninstall_grove
+# }
 
 cleanup() {
   kubectl_ctx delete -f "$MANIFEST" --ignore-not-found
