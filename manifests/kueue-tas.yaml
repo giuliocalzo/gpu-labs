@@ -29,14 +29,14 @@ metadata:
 spec:
   namespaceSelector: {}
   resourceGroups:
-    - coveredResources: ["cpu", "example.com/gpu"]
+    - coveredResources: ["cpu", "nvidia.com/gpu"]
       flavors:
         - name: gpu-flavor
           resources:
             - name: cpu
               nominalQuota: "100"
-            - name: example.com/gpu
-              nominalQuota: "8"
+            - name: nvidia.com/gpu
+              nominalQuota: "64"
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue

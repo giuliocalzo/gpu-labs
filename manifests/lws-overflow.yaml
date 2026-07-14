@@ -21,9 +21,9 @@ spec:
             resources:
               requests:
                 cpu: "50m"
-                example.com/gpu: "1"
+                nvidia.com/gpu: "8"
               limits:
-                example.com/gpu: "1"
+                nvidia.com/gpu: "8"
     workerTemplate:
       metadata:
         annotations:
@@ -36,6 +36,6 @@ spec:
             resources:
               requests:
                 cpu: "50m"
-                example.com/gpu: "1"
+                nvidia.com/gpu: "8"
               limits:
-                example.com/gpu: "1"
+                nvidia.com/gpu: "8"

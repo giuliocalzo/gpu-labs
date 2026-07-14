@@ -1,6 +1,10 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: kueue-tas-demo
+# Every worker carries:
+#   - the TAS topology labels (block / rack) + the ResourceFlavor selector
+#   - the common nvidia.com/* labels that GPU Feature Discovery would apply on a
+#     real 8x H100 node (inert here - no device plugin - but makes nodes realistic)
 nodes:
   - role: control-plane
   # ---- block-1 / rack-1 ----
@@ -9,41 +13,137 @@ nodes:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-1
       cloud.provider.com/topology-rack: rack-1
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"
   - role: worker
     labels:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-1
       cloud.provider.com/topology-rack: rack-1
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"
   # ---- block-1 / rack-2 ----
   - role: worker
     labels:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-1
       cloud.provider.com/topology-rack: rack-2
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"
   - role: worker
     labels:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-1
       cloud.provider.com/topology-rack: rack-2
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"
   # ---- block-2 / rack-3 ----
   - role: worker
     labels:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-2
       cloud.provider.com/topology-rack: rack-3
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"
   - role: worker
     labels:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-2
       cloud.provider.com/topology-rack: rack-3
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"
   # ---- block-2 / rack-4 ----
   - role: worker
     labels:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-2
       cloud.provider.com/topology-rack: rack-4
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"
   - role: worker
     labels:
       cloud.provider.com/node-group: tas-group
       cloud.provider.com/topology-block: block-2
       cloud.provider.com/topology-rack: rack-4
+      nvidia.com/gpu.present: "true"
+      nvidia.com/gpu.count: "8"
+      nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
+      nvidia.com/gpu.memory: "81559"
+      nvidia.com/gpu.family: hopper
+      nvidia.com/gpu.compute.major: "9"
+      nvidia.com/gpu.compute.minor: "0"
+      nvidia.com/gpu.machine: DGXH100
+      nvidia.com/mig.capable: "true"
+      nvidia.com/mig.strategy: single
+      nvidia.com/cuda.driver-version.full: "570.86.15"
+      nvidia.com/cuda.runtime-version.full: "12.8"

@@ -3,9 +3,12 @@ set -euo pipefail
 
 # ---- Pinned versions (edit here) ----
 CLUSTER_NAME="kueue-tas-demo"
-KIND_NODE_IMAGE="kindest/node:v1.33.1"
 KUEUE_VERSION="v0.18.3"
 LWS_VERSION="v0.9.0"
+
+# Runtime toggle: set FORCE_RECREATE=1 to delete and rebuild an existing cluster
+# so changes to kind/kind-cluster.yaml (e.g. node labels) actually take effect.
+FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 NS="kueue-demo"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,25 +49,33 @@ info "docker daemon is running"
 
 # ---------------------------------------------------------------------------
 step "Step 2/9: Creating kind cluster '$CLUSTER_NAME' (1 control-plane + 8 workers)"
-if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
-  info "cluster '$CLUSTER_NAME' already exists - reusing it"
-  info "(to start clean: kind delete cluster --name $CLUSTER_NAME)"
-else
+create_cluster() {
   kind create cluster --name "$CLUSTER_NAME" \
-    --image "$KIND_NODE_IMAGE" \
     --config "$SCRIPT_DIR/kind/kind-cluster.yaml"
+}
+if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
+  if [ -n "$FORCE_RECREATE" ]; then
+    info "FORCE_RECREATE set - deleting existing cluster '$CLUSTER_NAME'..."
+    kind delete cluster --name "$CLUSTER_NAME"
+    create_cluster
+  else
+    info "cluster '$CLUSTER_NAME' already exists - reusing it"
+    info "(set FORCE_RECREATE=1 to rebuild it, or: kind delete cluster --name $CLUSTER_NAME)"
+  fi
+else
+  create_cluster
 fi
 kubectl_ctx cluster-info >/dev/null
 
 # ---------------------------------------------------------------------------
-step "Step 3/9: Advertising fake accelerator (example.com/gpu: 1) on each worker"
+step "Step 3/9: Advertising fake accelerators (nvidia.com/gpu: 8) on each worker"
 mapfile -t WORKERS < <(kubectl_ctx get nodes -l cloud.provider.com/node-group=tas-group \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
 [ "${#WORKERS[@]}" -eq 8 ] || die "expected 8 workers, found ${#WORKERS[@]}"
 for node in "${WORKERS[@]}"; do
   kubectl_ctx patch node "$node" --subresource=status --type=json \
-    -p '[{"op":"add","path":"/status/capacity/example.com~1gpu","value":"1"}]' >/dev/null
-  info "patched $node -> example.com/gpu: 1"
+    -p '[{"op":"add","path":"/status/capacity/nvidia.com~1gpu","value":"8"}]' >/dev/null
+  info "patched $node -> nvidia.com/gpu: 8"
 done
 
 # ---------------------------------------------------------------------------
@@ -161,7 +172,7 @@ kubectl_ctx get clusterqueue tas-cluster-queue \
 'ADMITTED:.status.admittedWorkloads,'\
 'RESERVING:.status.reservingWorkloads'
 echo
-echo "example.com/gpu reserved:"
+echo "nvidia.com/gpu reserved:"
 kubectl_ctx get clusterqueue tas-cluster-queue \
   -o jsonpath='{range .status.flavorsReservation[*]}{.name}{": "}{range .resources[*]}{.name}{"="}{.total}{" "}{end}{"\n"}{end}'
 
