@@ -2,10 +2,10 @@
 
 A self-contained local lab that shows how **Kueue** wires together with common
 Kubernetes batch/AI building blocks — **LeaderWorkerSet (LWS)**, **RayJob**,
-**JobSet**, **Dynamic Resource Allocation (DRA)**, **NVIDIA Grove**, and the
-**NVIDIA KAI Scheduler** — plus Kueue's own scheduling features (topology-aware
-scheduling, fair sharing, workload priority, preemption). Everything runs on a
-single **kind** cluster
+**JobSet**, **Dynamic Resource Allocation (DRA)**, **NVIDIA Grove**, the
+**NVIDIA KAI Scheduler**, and **Volcano** — plus Kueue's own scheduling features
+(topology-aware scheduling, fair sharing, workload priority, preemption).
+Everything runs on a single **kind** cluster
 with **no real GPU** (each worker advertises **8** fake `nvidia.com/gpu`, like a
 real 8-GPU node). Pods are `pause` placeholders — **no real compute** — the one
 exception being `kueue-rayjob`, which runs an actual Ray image to form a real
@@ -27,6 +27,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`kueue-jobset`](scenarios/kueue-jobset/README.md)   | Kueue + **JobSet**: a whole JobSet (all its child Jobs) is gang-admitted under GPU quota; a 2nd JobSet stays Pending. |
 | [`grove-podcliques`](scenarios/grove-podcliques/README.md)  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |
 | [`grove-kai-topology`](scenarios/grove-kai-topology/README.md) | NVIDIA **Grove + KAI Scheduler**: KAI gang-schedules the whole PodGang (which the default scheduler can't) and packs the prefill gang into a single topology **block**. |
+| [`volcano-gang`](scenarios/volcano-gang/README.md) | **Volcano** batch scheduler: a Job group is gang-admitted all-or-nothing under a Volcano `Queue`'s capacity; a 2nd equal gang waits (comparison to Kueue). |
 
 Each scenario links to its own `README.md` above, describing exactly what it
 tests, how it's wired, and what to look for.
@@ -61,7 +62,7 @@ Examples:
 
 The first scenario you run creates the cluster and installs cert-manager, LWS,
 and Kueue (with `fairSharing` enabled at the controller level) and the shared
-`gpu-flavor`. Scenarios that need extra operators (RayJob, JobSet, DRA, Grove, KAI)
+`gpu-flavor`. Scenarios that need extra operators (RayJob, JobSet, DRA, Grove, KAI, Volcano)
 install them on demand via their `pre_run` hook and leave them running afterward
 for inspection (`clean <scenario>` or `down` tears everything down).
 Subsequent runs reuse everything. Scenarios are isolated (separate namespaces,
@@ -109,7 +110,8 @@ scenarios/<name>/
 
 Set at the top of `lib/common.sh` (overridable via env):
 `KUEUE_VERSION`, `LWS_VERSION`, `CERT_MANAGER_VERSION`, `GROVE_VERSION`,
-`KUBERAY_VERSION`, `JOBSET_VERSION`, `KAI_VERSION`, `CLUSTER_NAME`.
+`KUBERAY_VERSION`, `JOBSET_VERSION`, `KAI_VERSION`, `VOLCANO_VERSION`,
+`CLUSTER_NAME`.
 
 ## CI
 

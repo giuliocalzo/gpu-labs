@@ -1,0 +1,64 @@
+# Two identical Volcano Jobs (vcjobs), each modelling a small distributed
+# training run: one "worker" task fanned out to 2 pods, each claiming a whole
+# 8-GPU node (2 x 8 = 16 GPUs per job).
+#
+# minAvailable: 2 makes Volcano's gang plugin admit the job all-or-nothing -
+# both worker pods start together or neither does. Volcano auto-creates a
+# PodGroup (minMember: 2) per job to enforce this.
+#
+# The queue caps at 16 GPUs, so training-a's gang is admitted and training-b's
+# whole gang waits (Inqueue/Pending) until training-a releases its GPUs.
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: training-a
+  namespace: volcano-gang
+spec:
+  schedulerName: volcano
+  queue: volcano-demo
+  minAvailable: 2
+  tasks:
+    - name: worker
+      replicas: 2
+      template:
+        spec:
+          schedulerName: volcano
+          restartPolicy: Never
+          containers:
+            - name: worker
+              # pause placeholder: no real compute, the pod just holds its GPU
+              # reservation so the gang/queue behaviour is observable.
+              image: registry.k8s.io/pause:3.10
+              resources:
+                requests:
+                  cpu: "50m"
+                  nvidia.com/gpu: "8"
+                limits:
+                  nvidia.com/gpu: "8"
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: training-b
+  namespace: volcano-gang
+spec:
+  schedulerName: volcano
+  queue: volcano-demo
+  minAvailable: 2
+  tasks:
+    - name: worker
+      replicas: 2
+      template:
+        spec:
+          schedulerName: volcano
+          restartPolicy: Never
+          containers:
+            - name: worker
+              image: registry.k8s.io/pause:3.10
+              resources:
+                requests:
+                  cpu: "50m"
+                  nvidia.com/gpu: "8"
+                limits:
+                  nvidia.com/gpu: "8"

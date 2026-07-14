@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: volcano-gang
+---
+# A Volcano Queue with a hard GPU cap. `capability` is the queue's upper bound on
+# resources: at 16 GPUs it admits exactly one 16-GPU gang. A second gang of the
+# same size cannot fit the queue's capacity and stays pending - even though the
+# cluster still has 48 free GPUs. This is Volcano's queue-based quota gating, the
+# counterpart to a Kueue ClusterQueue's nominalQuota.
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: volcano-demo
+spec:
+  reclaimable: false
+  weight: 1
+  capability:
+    cpu: "100"
+    nvidia.com/gpu: 16

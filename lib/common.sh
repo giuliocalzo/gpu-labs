@@ -17,6 +17,7 @@ GROVE_VERSION="${GROVE_VERSION:-0.1.0-alpha.11}"
 KUBERAY_VERSION="${KUBERAY_VERSION:-1.6.2}"
 JOBSET_VERSION="${JOBSET_VERSION:-0.12.0}"
 KAI_VERSION="${KAI_VERSION:-0.16.3}"
+VOLCANO_VERSION="${VOLCANO_VERSION:-1.15.0}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -270,6 +271,29 @@ uninstall_kai() {
   step "Uninstalling the KAI Scheduler"
   helm_ctx uninstall kai-scheduler --namespace kai-scheduler --ignore-not-found --wait || true
   kubectl_ctx delete namespace kai-scheduler --ignore-not-found >/dev/null 2>&1 || true
+}
+
+# Install Volcano (batch scheduler) via Helm (scenario-scoped, not part of
+# install_base). Idempotent via 'helm upgrade -i'. The chart ships its own CRDs
+# (Job/Queue/PodGroup) and a scheduler whose default config enables the gang and
+# proportion plugins - exactly what the volcano-gang scenario relies on for
+# all-or-nothing admission and per-queue capacity.
+install_volcano() {
+  step "Installing Volcano (helm chart v${VOLCANO_VERSION})"
+  helm_ctx repo add volcano-sh https://volcano-sh.github.io/helm-charts >/dev/null 2>&1 || true
+  helm_ctx repo update volcano-sh >/dev/null 2>&1 || true
+  helm_ctx upgrade -i volcano volcano-sh/volcano \
+    --version="$VOLCANO_VERSION" \
+    --namespace volcano-system \
+    --create-namespace \
+    --wait --timeout 300s >/dev/null
+}
+
+# Remove Volcano installed by install_volcano.
+uninstall_volcano() {
+  step "Uninstalling Volcano"
+  helm_ctx uninstall volcano --namespace volcano-system --ignore-not-found --wait || true
+  kubectl_ctx delete namespace volcano-system --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------
