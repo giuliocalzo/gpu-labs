@@ -14,6 +14,21 @@ step() { printf "\n\033[1;34m==> %s\033[0m\n" "$*"; }
 info() { printf "    %s\n" "$*"; }
 die()  { printf "\n\033[1;31mERROR: %s\033[0m\n" "$*" >&2; exit 1; }
 
+# wait_for_count <count> <kind> [extra kubectl args...]
+# Poll until at least <count> objects of <kind> (matching the extra args) exist.
+# Kueue's LWS integration creates Workload objects a moment after the LWS is
+# applied, so `kubectl wait` would otherwise fail with "no matching resources".
+wait_for_count() {
+  local want="$1" kind="$2"; shift 2
+  local i n
+  for i in $(seq 1 30); do
+    n=$(kubectl get "$kind" -n "$NS" "$@" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+    [ "$n" -ge "$want" ] && return 0
+    sleep 2
+  done
+  die "timed out waiting for $want $kind object(s) in namespace $NS"
+}
+
 # ---------------------------------------------------------------------------
 step "Step 1/9: Preflight - checking required tools"
 for bin in docker kind kubectl; do
@@ -77,10 +92,22 @@ done
 # ---------------------------------------------------------------------------
 step "Step 7/9: Submitting the two LWS groups (replicas: 2, size: 4)"
 kubectl apply -f "$SCRIPT_DIR/manifests/lws-groups.yaml"
-info "waiting for Workloads to be Admitted..."
-kubectl wait --for=condition=Admitted workloads --all -n "$NS" --timeout=180s
-info "waiting for all group pods to be Ready..."
-kubectl wait --for=condition=Ready pods --all -n "$NS" --timeout=180s
+info "waiting for Kueue to create the group Workloads..."
+# Scope waits to the lws-groups resources so a pre-existing (intentionally
+# blocked) overflow workload on a reused cluster doesn't make the wait time out.
+GROUP_WLS=()
+for _ in $(seq 1 30); do
+  mapfile -t GROUP_WLS < <(kubectl get workloads -n "$NS" -o name 2>/dev/null | grep 'lws-groups' || true)
+  [ "${#GROUP_WLS[@]}" -ge 2 ] && break
+  sleep 2
+done
+[ "${#GROUP_WLS[@]}" -ge 2 ] || die "group Workloads were not created in time"
+info "waiting for group Workloads to be Admitted..."
+kubectl wait --for=condition=Admitted "${GROUP_WLS[@]}" -n "$NS" --timeout=180s
+info "waiting for group pods to be Ready..."
+wait_for_count 8 pods -l leaderworkerset.sigs.k8s.io/name=lws-groups
+kubectl wait --for=condition=Ready pods -l leaderworkerset.sigs.k8s.io/name=lws-groups \
+  -n "$NS" --timeout=180s
 
 # ---------------------------------------------------------------------------
 step "Step 8/9: Submitting the overflow group (should stay Pending)"
@@ -102,15 +129,22 @@ kubectl get workloads -n "$NS" \
 
 echo
 echo "--- Pod placement by topology (each group should sit in ONE block) ---"
+info "(gated/pending pods have no node yet and are listed separately below)"
 printf "%-46s %-8s %-8s %-8s %s\n" POD GROUP BLOCK RACK NODE
+# Use '|' as field separator so an empty nodeName (gated pods) doesn't shift columns.
 kubectl get pods -n "$NS" \
-  -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.nodeName}{" "}{.metadata.labels.leaderworkerset\.sigs\.k8s\.io/group-index}{"\n"}{end}' \
-  | while read -r pod node gidx; do
+  -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.spec.nodeName}{"|"}{.metadata.labels.leaderworkerset\.sigs\.k8s\.io/group-index}{"\n"}{end}' \
+  | while IFS='|' read -r pod node gidx; do
       [ -z "$node" ] && continue
-      block=$(kubectl get node "$node" -o jsonpath='{.metadata.labels.cloud\.provider\.com/topology-block}')
-      rack=$(kubectl get node "$node" -o jsonpath='{.metadata.labels.cloud\.provider\.com/topology-rack}')
+      block=$(kubectl get node "$node" -o jsonpath='{.metadata.labels.cloud\.provider\.com/topology-block}' 2>/dev/null || true)
+      rack=$(kubectl get node "$node" -o jsonpath='{.metadata.labels.cloud\.provider\.com/topology-rack}' 2>/dev/null || true)
       printf "%-46s %-8s %-8s %-8s %s\n" "$pod" "${gidx:-?}" "$block" "$rack" "$node"
     done | sort -k3,3 -k4,4
+
+echo
+echo "Pods not yet scheduled (gated by Kueue - the blocked group):"
+kubectl get pods -n "$NS" \
+  -o jsonpath='{range .items[?(@.status.phase=="Pending")]}{"    "}{.metadata.name}{" ("}{.status.phase}{")\n"}{end}'
 
 echo
 echo "--- ClusterQueue quota usage ---"
@@ -127,14 +161,12 @@ kubectl get clusterqueue tas-cluster-queue \
 
 echo
 echo "--- Why is the overflow group pending? ---"
-PENDING_WL=$(kubectl get workloads -n "$NS" \
-  -o jsonpath='{range .items[?(@.status.conditions[?(@.type=="Admitted")].status!="True")]}{.metadata.name}{"\n"}{end}' \
-  | grep overflow || true)
-if [ -n "$PENDING_WL" ]; then
-  kubectl get workload "$PENDING_WL" -n "$NS" \
-    -o jsonpath='{range .status.conditions[*]}{.type}{": "}{.reason}{" - "}{.message}{"\n"}{end}'
+OVERFLOW_WL=$(kubectl get workloads -n "$NS" -o name 2>/dev/null | grep 'lws-overflow' | head -n1 || true)
+if [ -n "$OVERFLOW_WL" ]; then
+  kubectl get "$OVERFLOW_WL" -n "$NS" \
+    -o jsonpath='{range .status.conditions[*]}{"    "}{.type}{": "}{.reason}{" - "}{.message}{"\n"}{end}'
 else
-  echo "  (overflow workload not found or already admitted)"
+  echo "    (overflow workload not found or already admitted)"
 fi
 
 echo
