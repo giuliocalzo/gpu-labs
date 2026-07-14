@@ -1,0 +1,41 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: lws-overflow
+  namespace: kueue-demo
+  labels:
+    kueue.x-k8s.io/queue-name: tas-local-queue
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 4
+    leaderTemplate:
+      metadata:
+        annotations:
+          kueue.x-k8s.io/podset-preferred-topology: cloud.provider.com/topology-rack
+          kueue.x-k8s.io/podset-group-name: lws-group
+      spec:
+        containers:
+          - name: leader
+            image: registry.k8s.io/pause:3.10
+            resources:
+              requests:
+                cpu: "50m"
+                example.com/gpu: "1"
+              limits:
+                example.com/gpu: "1"
+    workerTemplate:
+      metadata:
+        annotations:
+          kueue.x-k8s.io/podset-preferred-topology: cloud.provider.com/topology-rack
+          kueue.x-k8s.io/podset-group-name: lws-group
+      spec:
+        containers:
+          - name: worker
+            image: registry.k8s.io/pause:3.10
+            resources:
+              requests:
+                cpu: "50m"
+                example.com/gpu: "1"
+              limits:
+                example.com/gpu: "1"

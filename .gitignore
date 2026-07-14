@@ -1,0 +1,7 @@
+# Editor / OS
+.DS_Store
+*.swp
+
+# Local kubeconfig exports if any
+*.kubeconfig
+kubeconfig

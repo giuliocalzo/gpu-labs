@@ -1,0 +1,49 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kueue-tas-demo
+nodes:
+  - role: control-plane
+  # ---- block-1 / rack-1 ----
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-1
+      cloud.provider.com/topology-rack: rack-1
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-1
+      cloud.provider.com/topology-rack: rack-1
+  # ---- block-1 / rack-2 ----
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-1
+      cloud.provider.com/topology-rack: rack-2
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-1
+      cloud.provider.com/topology-rack: rack-2
+  # ---- block-2 / rack-3 ----
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-2
+      cloud.provider.com/topology-rack: rack-3
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-2
+      cloud.provider.com/topology-rack: rack-3
+  # ---- block-2 / rack-4 ----
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-2
+      cloud.provider.com/topology-rack: rack-4
+  - role: worker
+    labels:
+      cloud.provider.com/node-group: tas-group
+      cloud.provider.com/topology-block: block-2
+      cloud.provider.com/topology-rack: rack-4
