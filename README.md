@@ -20,6 +20,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 |---------------------|---------------|
 | [`kueue-tas`](scenarios/kueue-tas/README.md)         | Topology-Aware Scheduling: LWS groups co-locate, falling back rack → block; a 3rd group is quota-blocked and stays Pending. |
 | [`kueue-fair-sharing`](scenarios/kueue-fair-sharing/README.md)| Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
+| [`kueue-borrowing-lending`](scenarios/kueue-borrowing-lending/README.md) | Cohort borrowing: one queue borrows an idle peer's quota up to its `borrowingLimit`, then further jobs stay Pending despite free GPUs. |
 | [`kueue-workload-priority`](scenarios/kueue-workload-priority/README.md) | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
 | [`kueue-preemption`](scenarios/kueue-preemption/README.md)  | A high-priority job **evicts** a running low-priority job to fit within quota. |
 | [`kueue-dra`](scenarios/kueue-dra/README.md)         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |

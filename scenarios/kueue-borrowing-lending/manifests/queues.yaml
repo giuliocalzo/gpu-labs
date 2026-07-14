@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: borrow-a
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: borrow-b
+---
+# Two ClusterQueues in the cohort "borrow-cohort". Each nominally owns 16 GPUs.
+#
+# borrow-a is the BORROWER: on top of its 16 nominal GPUs it may borrow up to
+# borrowingLimit (16) more from idle cohort peers -> a hard ceiling of 32 GPUs.
+#
+# borrow-b is the LENDER: while idle it may lend up to lendingLimit (16) of its
+# nominal quota to the cohort.
+#
+# So even though the cluster has 64 GPUs and borrow-b is completely idle,
+# borrow-a can never exceed 32 GPUs. The borrowingLimit - not the cluster size -
+# is the binding constraint.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: borrow-a-cq
+spec:
+  namespaceSelector: {}
+  cohortName: borrow-cohort
+  resourceGroups:
+    - coveredResources: ["cpu", "nvidia.com/gpu"]
+      flavors:
+        - name: gpu-flavor
+          resources:
+            - name: cpu
+              nominalQuota: "100"
+            - name: nvidia.com/gpu
+              nominalQuota: "16"
+              # May borrow at most 16 more GPUs from the cohort (ceiling = 32).
+              borrowingLimit: "16"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: borrow-b-cq
+spec:
+  namespaceSelector: {}
+  cohortName: borrow-cohort
+  resourceGroups:
+    - coveredResources: ["cpu", "nvidia.com/gpu"]
+      flavors:
+        - name: gpu-flavor
+          resources:
+            - name: cpu
+              nominalQuota: "100"
+            - name: nvidia.com/gpu
+              nominalQuota: "16"
+              # May lend at most 16 of its idle GPUs to the cohort.
+              lendingLimit: "16"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  namespace: borrow-a
+  name: borrow-a-queue
+spec:
+  clusterQueue: borrow-a-cq
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  namespace: borrow-b
+  name: borrow-b-queue
+spec:
+  clusterQueue: borrow-b-cq
