@@ -23,6 +23,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`kueue-fair-sharing`](scenarios/kueue-fair-sharing/README.md)| Two teams in one cohort: Team A borrows the whole cohort, then fair sharing reclaims ~half for Team B. |
 | [`kueue-borrowing-lending`](scenarios/kueue-borrowing-lending/README.md) | Cohort borrowing: one queue borrows an idle peer's quota up to its `borrowingLimit`, then further jobs stay Pending despite free GPUs. |
 | [`kueue-wait-for-pods-ready`](scenarios/kueue-wait-for-pods-ready/README.md) | `waitForPodsReady`: an admitted gang whose pods never become Ready is evicted (`PodsReadyTimeout`) and requeued, freeing its quota. |
+| [`kueue-partial-admission`](scenarios/kueue-partial-admission/README.md) | Partial admission: a Job asking for more than the quota is admitted at reduced parallelism (shrink-to-fit) instead of staying Pending. |
 | [`kueue-workload-priority`](scenarios/kueue-workload-priority/README.md) | `WorkloadPriorityClass` controls admission **order** when quota is scarce (high before low). |
 | [`kueue-preemption`](scenarios/kueue-preemption/README.md)  | A high-priority job **evicts** a running low-priority job to fit within quota. |
 | [`kueue-dra`](scenarios/kueue-dra/README.md)         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |

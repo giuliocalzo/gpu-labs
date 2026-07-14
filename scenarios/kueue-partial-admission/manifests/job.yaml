@@ -1,0 +1,36 @@
+# A batch/v1 Job that asks for more than the ClusterQueue can grant, but opts in
+# to Kueue's partial admission: the kueue.x-k8s.io/job-min-parallelism annotation
+# tells Kueue it may shrink parallelism (down to 2) to fit available quota.
+#
+# Requested: parallelism 8 x nvidia.com/gpu 8 = 64 GPUs.
+# Quota:     40 GPUs -> Kueue admits with parallelism reduced to 5 (5 x 8 = 40),
+# which is >= the minimum of 2, so the Job runs at reduced size instead of
+# staying Pending. Kueue patches spec.parallelism down to the admitted count.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: partial
+  namespace: partial-admission
+  labels:
+    kueue.x-k8s.io/queue-name: partial-queue
+  annotations:
+    kueue.x-k8s.io/job-min-parallelism: "2"
+spec:
+  parallelism: 8
+  completions: 8
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: c
+          # pause placeholder: no real compute, each pod just holds a whole
+          # 8-GPU node so the reduced-parallelism admission is observable.
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "50m"
+              nvidia.com/gpu: "8"
+            limits:
+              nvidia.com/gpu: "8"
