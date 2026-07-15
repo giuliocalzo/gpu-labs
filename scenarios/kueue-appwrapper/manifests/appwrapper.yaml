@@ -1,0 +1,47 @@
+# A CodeFlare AppWrapper wraps arbitrary Kubernetes resources so Kueue can manage
+# them as one logical Workload - without the wrapped controllers needing any
+# Kueue awareness. Here it wraps a single batch/v1 Job (2 pods x 8 GPUs), but the
+# same mechanism works for any resource(s). The scenario creates this twice
+# (generateName gives each a unique name).
+#
+# Kueue treats the WHOLE AppWrapper (its declared podSets = 16 GPUs) as one gang
+# Workload and controls spec.suspend: the wrapped Job is only created once the
+# whole gang is admitted within quota.
+apiVersion: workload.codeflare.dev/v1beta2
+kind: AppWrapper
+metadata:
+  generateName: aw-
+  namespace: appwrapper
+  labels:
+    kueue.x-k8s.io/queue-name: appwrapper-queue
+spec:
+  components:
+    - # podSets tells Kueue the resource footprint of the wrapped Job: the pod
+      # template lives at template.spec.template and runs with 2 replicas
+      # (parallelism), so Kueue reserves 2 x 8 = 16 GPUs.
+      podSets:
+        - path: template.spec.template
+          replicas: 2
+      template:
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          generateName: aw-job-
+        spec:
+          parallelism: 2
+          completions: 2
+          backoffLimit: 0
+          template:
+            spec:
+              restartPolicy: Never
+              containers:
+                - name: c
+                  # pause placeholder: no real compute, each pod just holds a
+                  # whole 8-GPU node so gang admission/quota gating is observable.
+                  image: registry.k8s.io/pause:3.10
+                  resources:
+                    requests:
+                      cpu: "50m"
+                      nvidia.com/gpu: "8"
+                    limits:
+                      nvidia.com/gpu: "8"

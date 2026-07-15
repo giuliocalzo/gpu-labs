@@ -19,6 +19,7 @@ JOBSET_VERSION="${JOBSET_VERSION:-0.12.0}"
 KAI_VERSION="${KAI_VERSION:-0.16.3}"
 VOLCANO_VERSION="${VOLCANO_VERSION:-1.15.0}"
 KUBEFLOW_TRAINER_VERSION="${KUBEFLOW_TRAINER_VERSION:-2.2.1}"
+APPWRAPPER_VERSION="${APPWRAPPER_VERSION:-1.2.2}"
 FORCE_RECREATE="${FORCE_RECREATE:-}"
 
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -341,6 +342,29 @@ uninstall_kubeflow_trainer() {
   step "Uninstalling Kubeflow Trainer"
   helm_ctx uninstall kubeflow-trainer --namespace kubeflow-system --ignore-not-found --wait || true
   kubectl_ctx delete namespace kubeflow-system --ignore-not-found >/dev/null 2>&1 || true
+}
+
+# Install the CodeFlare AppWrapper operator from its release manifest
+# (scenario-scoped, not part of install_base). It ships a single install.yaml
+# (namespace appwrapper-system, the appwrappers.workload.codeflare.dev CRD, and
+# the controller) and self-manages its webhook TLS (no cert-manager needed).
+# --server-side avoids the large-CRD annotation limit; --force-conflicts keeps
+# re-applies idempotent. AppWrapper is a built-in Kueue integration
+# (workload.codeflare.dev/appwrapper, already enabled in base/kueue-values.yaml),
+# so once the operator is present Kueue can manage AppWrappers.
+install_appwrapper() {
+  step "Installing the AppWrapper operator (release v${APPWRAPPER_VERSION})"
+  kubectl_ctx apply --server-side --force-conflicts \
+    -f "https://github.com/project-codeflare/appwrapper/releases/download/v${APPWRAPPER_VERSION}/install.yaml" >/dev/null
+  kubectl_ctx -n appwrapper-system rollout status deploy/appwrapper-controller-manager --timeout=180s
+}
+
+# Remove the AppWrapper operator installed by install_appwrapper.
+uninstall_appwrapper() {
+  step "Uninstalling the AppWrapper operator"
+  kubectl_ctx delete \
+    -f "https://github.com/project-codeflare/appwrapper/releases/download/v${APPWRAPPER_VERSION}/install.yaml" \
+    --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------

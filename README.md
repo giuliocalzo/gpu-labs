@@ -2,10 +2,10 @@
 
 A self-contained local lab that shows how **Kueue** wires together with common
 Kubernetes batch/AI building blocks — **LeaderWorkerSet (LWS)**, **RayJob**,
-**JobSet**, **Kubeflow Trainer (TrainJob)**, **Dynamic Resource Allocation
-(DRA)**, **NVIDIA Grove**, the **NVIDIA KAI Scheduler**, and **Volcano** — plus
-Kueue's own scheduling features (topology-aware scheduling, fair sharing,
-workload priority, preemption).
+**JobSet**, **Kubeflow Trainer (TrainJob)**, **CodeFlare AppWrapper**, **Dynamic
+Resource Allocation (DRA)**, **NVIDIA Grove**, the **NVIDIA KAI Scheduler**, and
+**Volcano** — plus Kueue's own scheduling features (topology-aware scheduling,
+fair sharing, workload priority, preemption).
 Everything runs on a single **kind** cluster
 with **no real GPU** (each worker advertises **8** fake `nvidia.com/gpu`, like a
 real 8-GPU node). Pods are `pause` placeholders — **no real compute** — the one
@@ -29,6 +29,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`kueue-dra`](scenarios/kueue-dra/README.md)         | Dynamic Resource Allocation: claim-based GPU devices (via the DRA example driver) put under Kueue quota. |
 | [`kueue-rayjob`](scenarios/kueue-rayjob/README.md)   | Kueue + **RayJob**: a whole Ray cluster (head + GPU worker) is gang-admitted under GPU quota; a 2nd RayJob stays Pending. |
 | [`kueue-jobset`](scenarios/kueue-jobset/README.md)   | Kueue + **JobSet**: a whole JobSet (all its child Jobs) is gang-admitted under GPU quota; a 2nd JobSet stays Pending. |
+| [`kueue-appwrapper`](scenarios/kueue-appwrapper/README.md) | Kueue + **AppWrapper**: a whole AppWrapper (its wrapped resources) is gang-admitted under GPU quota; a 2nd stays Pending. |
 | [`kueue-training-operator`](scenarios/kueue-training-operator/README.md) | Kueue + **Kubeflow Trainer (TrainJob)**: a whole TrainJob (all its nodes) is gang-admitted under GPU quota; a 2nd stays Pending. |
 | [`grove-podcliques`](scenarios/grove-podcliques/README.md)  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |
 | [`grove-kai-topology`](scenarios/grove-kai-topology/README.md) | NVIDIA **Grove + KAI Scheduler**: KAI gang-schedules the whole PodGang (which the default scheduler can't) and packs the prefill gang into a single topology **block**. |
@@ -67,7 +68,7 @@ Examples:
 
 The first scenario you run creates the cluster and installs cert-manager, LWS,
 and Kueue (with `fairSharing` enabled at the controller level) and the shared
-`gpu-flavor`. Scenarios that need extra operators (RayJob, JobSet, Kubeflow Trainer, DRA, Grove, KAI, Volcano)
+`gpu-flavor`. Scenarios that need extra operators (RayJob, JobSet, Kubeflow Trainer, AppWrapper, DRA, Grove, KAI, Volcano)
 install them on demand via their `pre_run` hook and leave them running afterward
 for inspection (`clean <scenario>` or `down` tears everything down).
 Subsequent runs reuse everything. Scenarios are isolated (separate namespaces,
@@ -116,7 +117,7 @@ scenarios/<name>/
 Set at the top of `lib/common.sh` (overridable via env):
 `KUEUE_VERSION`, `LWS_VERSION`, `CERT_MANAGER_VERSION`, `GROVE_VERSION`,
 `KUBERAY_VERSION`, `JOBSET_VERSION`, `KAI_VERSION`, `VOLCANO_VERSION`,
-`KUBEFLOW_TRAINER_VERSION`, `CLUSTER_NAME`.
+`KUBEFLOW_TRAINER_VERSION`, `APPWRAPPER_VERSION`, `CLUSTER_NAME`.
 
 ## CI
 
