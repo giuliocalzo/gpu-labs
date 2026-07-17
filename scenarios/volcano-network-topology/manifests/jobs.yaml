@@ -1,0 +1,69 @@
+# Two 4-pod gangs, each pod claiming a whole 8-GPU node (4 x 8 = 32 GPUs = 4
+# nodes per gang). The only difference is the network-topology constraint.
+#
+# topo-tier2: hard, highestTierAllowed 2 -> all 4 pods must land inside ONE tier-2
+#   HyperNode (a block = 4 nodes). This fits, so the gang runs, packed into a
+#   single block (it may span the block's two racks, but never crosses blocks).
+#
+# topo-tier1: hard, highestTierAllowed 1 -> all 4 pods must land inside ONE tier-1
+#   HyperNode (a rack = 2 nodes). Four whole-node pods cannot fit a 2-node rack,
+#   so the gang stays Pending forever - even though the cluster still has 32 free
+#   GPUs. This is a topology constraint, not a capacity one.
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: topo-tier2
+  namespace: volcano-topology
+spec:
+  schedulerName: volcano
+  queue: vol-topo
+  minAvailable: 4
+  networkTopology:
+    mode: hard
+    highestTierAllowed: 2
+  tasks:
+    - name: w
+      replicas: 4
+      template:
+        spec:
+          schedulerName: volcano
+          restartPolicy: Never
+          containers:
+            - name: c
+              image: registry.k8s.io/pause:3.10
+              resources:
+                requests:
+                  cpu: "100m"
+                  nvidia.com/gpu: "8"
+                limits:
+                  nvidia.com/gpu: "8"
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: topo-tier1
+  namespace: volcano-topology
+spec:
+  schedulerName: volcano
+  queue: vol-topo
+  minAvailable: 4
+  networkTopology:
+    mode: hard
+    highestTierAllowed: 1
+  tasks:
+    - name: w
+      replicas: 4
+      template:
+        spec:
+          schedulerName: volcano
+          restartPolicy: Never
+          containers:
+            - name: c
+              image: registry.k8s.io/pause:3.10
+              resources:
+                requests:
+                  cpu: "100m"
+                  nvidia.com/gpu: "8"
+                limits:
+                  nvidia.com/gpu: "8"

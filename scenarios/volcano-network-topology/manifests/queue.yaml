@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: volcano-topology
+---
+# A single queue with enough capacity for both jobs (64 GPUs). Placement here is
+# driven purely by the jobs' networkTopology constraints, not by queue quota.
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: vol-topo
+spec:
+  reclaimable: false
+  weight: 1
+  capability:
+    cpu: "1000"
+    nvidia.com/gpu: 64

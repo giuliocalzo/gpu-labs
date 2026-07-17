@@ -1,0 +1,117 @@
+# Volcano HyperNodes describe the cluster's network topology as a tree of
+# performance domains. Our 8 fake-GPU workers are wired as:
+#
+#   hn-root (tier 3)
+#   |-- hn-block-1 (tier 2)          block-1
+#   |     |-- hn-rack-1 (tier 1)     rack-1: worker,  worker2
+#   |     `-- hn-rack-2 (tier 1)     rack-2: worker3, worker4
+#   `-- hn-block-2 (tier 2)          block-2
+#         |-- hn-rack-3 (tier 1)     rack-3: worker5, worker6
+#         `-- hn-rack-4 (tier 1)     rack-4: worker7, worker8
+#
+# The lower the tier, the tighter (faster) the domain: a tier-1 HyperNode is one
+# rack (2 nodes = 16 GPUs), a tier-2 HyperNode is one block (4 nodes = 32 GPUs).
+#
+# Leaf HyperNodes (tier 1) select real nodes with labelMatch on the rack label.
+# Non-leaf HyperNodes (tier 2/3) select child HyperNodes with exactMatch (Volcano
+# forbids regex/label selectors on non-leaf members).
+---
+apiVersion: topology.volcano.sh/v1alpha1
+kind: HyperNode
+metadata:
+  name: hn-rack-1
+spec:
+  tier: 1
+  members:
+    - type: Node
+      selector:
+        labelMatch:
+          matchLabels:
+            cloud.provider.com/topology-rack: rack-1
+---
+apiVersion: topology.volcano.sh/v1alpha1
+kind: HyperNode
+metadata:
+  name: hn-rack-2
+spec:
+  tier: 1
+  members:
+    - type: Node
+      selector:
+        labelMatch:
+          matchLabels:
+            cloud.provider.com/topology-rack: rack-2
+---
+apiVersion: topology.volcano.sh/v1alpha1
+kind: HyperNode
+metadata:
+  name: hn-rack-3
+spec:
+  tier: 1
+  members:
+    - type: Node
+      selector:
+        labelMatch:
+          matchLabels:
+            cloud.provider.com/topology-rack: rack-3
+---
+apiVersion: topology.volcano.sh/v1alpha1
+kind: HyperNode
+metadata:
+  name: hn-rack-4
+spec:
+  tier: 1
+  members:
+    - type: Node
+      selector:
+        labelMatch:
+          matchLabels:
+            cloud.provider.com/topology-rack: rack-4
+---
+apiVersion: topology.volcano.sh/v1alpha1
+kind: HyperNode
+metadata:
+  name: hn-block-1
+spec:
+  tier: 2
+  members:
+    - type: HyperNode
+      selector:
+        exactMatch:
+          name: hn-rack-1
+    - type: HyperNode
+      selector:
+        exactMatch:
+          name: hn-rack-2
+---
+apiVersion: topology.volcano.sh/v1alpha1
+kind: HyperNode
+metadata:
+  name: hn-block-2
+spec:
+  tier: 2
+  members:
+    - type: HyperNode
+      selector:
+        exactMatch:
+          name: hn-rack-3
+    - type: HyperNode
+      selector:
+        exactMatch:
+          name: hn-rack-4
+---
+apiVersion: topology.volcano.sh/v1alpha1
+kind: HyperNode
+metadata:
+  name: hn-root
+spec:
+  tier: 3
+  members:
+    - type: HyperNode
+      selector:
+        exactMatch:
+          name: hn-block-1
+    - type: HyperNode
+      selector:
+        exactMatch:
+          name: hn-block-2

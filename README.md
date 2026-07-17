@@ -40,6 +40,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`kai-podgroup-gang`](scenarios/kai-podgroup-gang/README.md) | **KAI** explicit `PodGroup`: a hand-authored gang (`minMember`) is admitted **all-or-nothing**; a 2nd gang stays fully Pending even with one node free (a partial gang can't run). |
 | [`volcano-gang`](scenarios/volcano-gang/README.md) | **Volcano** batch scheduler: a Job group is gang-admitted all-or-nothing under a Volcano `Queue`'s capacity; a 2nd equal gang waits (comparison to Kueue). |
 | [`volcano-queue-capacity`](scenarios/volcano-queue-capacity/README.md) | **Volcano** queue resource management: team-a borrows the whole cluster while team-b is idle; when team-b submits, the `capacity` plugin's `reclaim` action evicts team-a's over-`deserved` jobs back to each queue's fair share. |
+| [`volcano-network-topology`](scenarios/volcano-network-topology/README.md) | **Volcano** network-topology-aware scheduling: `HyperNode`s model racks/blocks; a `hard` `highestTierAllowed=2` gang packs into one block, while an identical `highestTierAllowed=1` gang can't fit a 2-node rack and stays Pending. |
 
 Each scenario links to its own `README.md` above, describing exactly what it
 tests, how it's wired, and what to look for.
