@@ -5,9 +5,8 @@ name: scenarios
 # concurrently (unlike the shared local cluster used by ./demo.sh).
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # Manual-only: this matrix spins up a kind cluster per scenario, so run it on
+  # demand rather than on every push/PR.
   workflow_dispatch:
 
 permissions:
