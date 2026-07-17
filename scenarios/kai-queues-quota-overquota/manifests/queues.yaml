@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kai-quota
+---
+# KAI's queue model. A queue's `quota` is its GUARANTEED share; `limit` is the
+# HARD CAP on what it may consume (quota + borrowed over-quota); `overQuotaWeight`
+# controls how idle surplus is split between siblings. -1 means "unbounded".
+#
+# The root owns the whole cluster (64 fake GPUs). cpu/memory are left unbounded
+# so gpu is the only binding resource in this demo.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: quota-root
+spec:
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+# team-a: guaranteed 16 GPUs, but allowed to BORROW idle cluster capacity up to a
+# hard limit of 32. So when team-b is idle, team-a can run beyond its 16 quota -
+# but never past 32, even though the cluster physically has 64 GPUs free.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: quota-team-a
+spec:
+  parentQueue: quota-root
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: 16, limit: 32, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+# team-b: guaranteed 16 GPUs, no hard limit. It sits idle in this scenario - its
+# 16-GPU quota is the surplus that team-a borrows from (team-a's over-quota comes
+# out of the cluster capacity team-b is not using).
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: quota-team-b
+spec:
+  parentQueue: quota-root
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: 16, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }

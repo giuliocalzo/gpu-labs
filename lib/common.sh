@@ -415,6 +415,66 @@ submit_gpu_jobs() {
   done | kubectl_ctx apply -f -
 }
 
+# kai_gpu_job <ns> <queue> <name> <gpus> [priorityClassName]
+# Emits a batch/v1 Job (one long-lived pod) scheduled by KAI: the pod carries
+# schedulerName=kai-scheduler and the kai.scheduler/queue label so KAI builds a
+# PodGroup for it. Unlike gpu_job (Kueue) it is NOT suspended - KAI admits pods
+# directly via the scheduler.
+#
+# The container is a plain `sleep` (busybox), NOT `pause`: when KAI evicts a pod
+# for preemption/reclaim, pause installs a SIGTERM handler and exits 0, so the
+# Job would count that as success and never recreate it. `sleep` has no handler,
+# so eviction kills it with a non-zero exit; with the high backoffLimit the Job
+# recreates the pod, which then sits visibly Pending (the preempted work waiting
+# for GPUs) instead of vanishing. Default priorityClassName is train
+# (preemptible); grace period is short so eviction is quick.
+kai_gpu_job() {
+  local ns="$1" queue="$2" name="$3" gpus="$4" prio="${5:-train}"
+  echo "---"
+  cat <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: $name
+  namespace: $ns
+spec:
+  parallelism: 1
+  completions: 1
+  backoffLimit: 100
+  template:
+    metadata:
+      labels:
+        kai.scheduler/queue: $queue
+        # mirror the priority class as a plain label so waits/inspection can
+        # distinguish priorities within a single queue (queue label alone can't)
+        gpu-lab/priority: $prio
+    spec:
+      schedulerName: kai-scheduler
+      priorityClassName: $prio
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: c
+          image: busybox:1.36
+          command: ["sleep", "100000"]
+          resources:
+            requests:
+              cpu: "100m"
+              nvidia.com/gpu: "$gpus"
+            limits:
+              nvidia.com/gpu: "$gpus"
+EOF
+}
+
+# submit_kai_jobs <ns> <queue> <name-prefix> <count> <gpus> [priorityClassName]
+# Applies <count> KAI-scheduled GPU jobs named <prefix>-1 .. <prefix>-<count>.
+submit_kai_jobs() {
+  local ns="$1" queue="$2" prefix="$3" count="$4" gpus="$5" prio="${6:-train}" i
+  for i in $(seq 1 "$count"); do
+    kai_gpu_job "$ns" "$queue" "${prefix}-${i}" "$gpus" "$prio"
+  done | kubectl_ctx apply -f -
+}
+
 # ---------------------------------------------------------------------------
 # Generic inspection helpers (scenarios compose these)
 # ---------------------------------------------------------------------------
@@ -500,4 +560,73 @@ count_admitted() {
   kubectl_ctx get workloads -n "$1" \
     -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Admitted")].status}{"\n"}{end}' 2>/dev/null \
     | grep -c True || true
+}
+
+# ---------------------------------------------------------------------------
+# KAI Scheduler inspection helpers (shared by the kai-* queue scenarios)
+# ---------------------------------------------------------------------------
+# wait_for_pods_phase <count> <phase> <ns> [label-selector] [tries] - poll until
+# at least <count> pods in <ns> (optionally matching a label selector) reach
+# <phase>. Polls <tries> times (default 60) 2s apart. Returns non-zero on timeout
+# so callers can decide whether that is fatal.
+wait_for_pods_phase() {
+  local want="$1" phase="$2" ns="$3" sel="${4:-}" tries="${5:-60}" i n
+  for i in $(seq 1 "$tries"); do
+    if [ -n "$sel" ]; then
+      n=$(kubectl_ctx get pods -n "$ns" -l "$sel" \
+        --field-selector "status.phase=$phase" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+    else
+      n=$(kubectl_ctx get pods -n "$ns" \
+        --field-selector "status.phase=$phase" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    [ "$n" -ge "$want" ] && return 0
+    sleep 2
+  done
+  return 1
+}
+
+# inspect_kai_queues <queue>... - table of KAI queues showing each queue's gpu
+# quota (guaranteed share), hard limit, and the live allocated/requested gpu from
+# .status, so quota vs over-quota borrowing is visible at a glance. A limit of
+# -1 means "unbounded" (borrow up to cluster capacity).
+inspect_kai_queues() {
+  kubectl_ctx get queues.scheduling.run.ai "$@" -o custom-columns=\
+'QUEUE:.metadata.name,'\
+'GPU_QUOTA:.spec.resources.gpu.quota,'\
+'GPU_LIMIT:.spec.resources.gpu.limit,'\
+'GPU_ALLOC:.status.allocated.nvidia\.com/gpu,'\
+'GPU_REQ:.status.requested.nvidia\.com/gpu' 2>/dev/null | sed 's/^/    /' \
+    || echo "    (none)"
+}
+
+# inspect_kai_pods <ns> - pods in <ns> with their phase, KAI queue, priority
+# class and node, sorted by queue then phase so Running vs Pending per queue is
+# easy to read.
+inspect_kai_pods() {
+  local ns="$1" out
+  out=$(kubectl_ctx get pods -n "$ns" -o custom-columns=\
+'POD:.metadata.name,'\
+'PHASE:.status.phase,'\
+'QUEUE:.metadata.labels.kai\.scheduler/queue,'\
+'PRIORITY:.spec.priorityClassName,'\
+'NODE:.spec.nodeName' 2>/dev/null)
+  if [ -z "$out" ]; then echo "    (none)"; return; fi
+  # print the header, then the body sorted by queue then phase (no head/tail on a
+  # single pipe - that races and can drop rows)
+  { printf '%s\n' "$out" | head -n1
+    printf '%s\n' "$out" | tail -n +2 | sort -k3,3 -k2,2
+  } | sed 's/^/    /'
+}
+
+# inspect_kai_events <ns> - recent scheduling events in <ns> that reveal KAI
+# preemption/reclaim/eviction activity (empty if none happened).
+inspect_kai_events() {
+  local ns="$1" out
+  out=$(kubectl_ctx get events -n "$ns" --sort-by=.lastTimestamp 2>/dev/null \
+    | grep -Ei 'evict|reclaim|preempt' | tail -n 15 || true)
+  if [ -n "$out" ]; then
+    echo "$out" | sed 's/^/    /'
+  else
+    echo "    (no preemption/reclaim events yet)"
+  fi
 }

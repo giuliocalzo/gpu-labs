@@ -34,6 +34,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`grove-podcliques`](scenarios/grove-podcliques/README.md)  | NVIDIA **Grove**: one `PodCliqueSet` expands into role cliques, a scaling group, a PodGang, and pods started in order (frontend → prefill → decode). |
 | [`grove-kai-topology`](scenarios/grove-kai-topology/README.md) | NVIDIA **Grove + KAI Scheduler**: KAI gang-schedules the whole PodGang (which the default scheduler can't) and packs the prefill gang into a single topology **block**. |
 | [`kai-lws-topology`](scenarios/kai-lws-topology/README.md) | **KAI Scheduler + LeaderWorkerSet**: KAI gang-schedules the LWS into one topology **block** (required) and packs it **2 pods per rack** (preferred). |
+| [`kai-queues-quota-overquota`](scenarios/kai-queues-quota-overquota/README.md) | **KAI** queue model: a queue borrows idle GPUs **past its quota** (over-quota), but its hard **limit** caps it below cluster capacity so the rest stay Pending. |
 | [`volcano-gang`](scenarios/volcano-gang/README.md) | **Volcano** batch scheduler: a Job group is gang-admitted all-or-nothing under a Volcano `Queue`'s capacity; a 2nd equal gang waits (comparison to Kueue). |
 
 Each scenario links to its own `README.md` above, describing exactly what it
