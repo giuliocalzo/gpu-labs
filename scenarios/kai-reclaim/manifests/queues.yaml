@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kai-reclaim
+---
+# Root owns the whole cluster (64 fake GPUs). Two sibling teams each get a
+# guaranteed 32-GPU quota and no hard limit, so either may borrow the other's
+# idle share - until the owner comes back and RECLAIMS it.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: reclaim-root
+spec:
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+# team-a: guaranteed 32 GPUs. It starts first and, while team-b is idle, borrows
+# the full 64-GPU cluster (32 quota + 32 over-quota).
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: reclaim-team-a
+spec:
+  parentQueue: reclaim-root
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: 32, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+# team-b: guaranteed 32 GPUs. It wakes up later and reclaims its guaranteed share
+# from team-a's over-quota (preemptible) pods.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: reclaim-team-b
+spec:
+  parentQueue: reclaim-root
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: 32, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
