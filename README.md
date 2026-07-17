@@ -36,6 +36,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`kai-lws-topology`](scenarios/kai-lws-topology/README.md) | **KAI Scheduler + LeaderWorkerSet**: KAI gang-schedules the LWS into one topology **block** (required) and packs it **2 pods per rack** (preferred). |
 | [`kai-queues-quota-overquota`](scenarios/kai-queues-quota-overquota/README.md) | **KAI** queue model: a queue borrows idle GPUs **past its quota** (over-quota), but its hard **limit** caps it below cluster capacity so the rest stay Pending. |
 | [`kai-reclaim`](scenarios/kai-reclaim/README.md) | **KAI** reclaim: one queue borrows the whole cluster while a peer is idle; when the peer submits, KAI **reclaims** its guaranteed quota by evicting the borrower's over-quota pods (never below the borrower's own quota). |
+| [`kai-priority-preemption`](scenarios/kai-priority-preemption/README.md) | **KAI** priority preemption: a full queue of preemptible `train` jobs is **preempted** by higher-priority `inference` jobs in the same queue; the evicted `train` jobs wait Pending. |
 | [`volcano-gang`](scenarios/volcano-gang/README.md) | **Volcano** batch scheduler: a Job group is gang-admitted all-or-nothing under a Volcano `Queue`'s capacity; a 2nd equal gang waits (comparison to Kueue). |
 
 Each scenario links to its own `README.md` above, describing exactly what it

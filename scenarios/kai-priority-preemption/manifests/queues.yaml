@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kai-priority
+---
+# Root owns the cluster; cpu/memory unbounded so gpu is the only binding resource.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: priority-root
+spec:
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+# A single deliberately-small queue: quota == limit == 16 GPUs (2 nodes). With no
+# over-quota headroom, the queue holds exactly 2 of our 8-GPU jobs at a time, so
+# a higher-priority workload can only get in by PREEMPTING a lower-priority one
+# already running in the same queue.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: priority-queue
+spec:
+  parentQueue: priority-root
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: 16, limit: 16, overQuotaWeight: 0 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
