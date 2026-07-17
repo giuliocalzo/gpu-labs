@@ -1,0 +1,37 @@
+---
+# KAI's view of the cluster hierarchy: block -> rack -> host, built from the
+# node labels our kind cluster already carries (see cluster/kind-cluster.yaml).
+# The name is what workloads reference via the kai.scheduler/topology annotation.
+apiVersion: kai.scheduler/v1alpha1
+kind: Topology
+metadata:
+  name: gpu-lab-topology
+spec:
+  levels:
+    - nodeLabel: cloud.provider.com/topology-block
+    - nodeLabel: cloud.provider.com/topology-rack
+    - nodeLabel: kubernetes.io/hostname
+---
+# KAI queue hierarchy the LWS pods run under (label kai.scheduler/queue).
+# quota: -1 means "no reservation, best-effort" - this scenario is about topology
+# placement, not quota gating (that is what the kueue-* scenarios show).
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: lws-root
+spec:
+  resources:
+    cpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: lws-queue
+spec:
+  parentQueue: lws-root
+  resources:
+    cpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu: { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }

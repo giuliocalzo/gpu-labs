@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kai-lws
+---
+# A LeaderWorkerSet scheduled by the KAI Scheduler with topology-aware placement.
+# The group is 1 leader + 3 workers (size 4), each pod holding a whole 8-GPU node,
+# so the group is 4 nodes / 32 GPUs.
+#
+# KAI's PodGrouper turns the whole LWS into one gang PodGroup and honours two
+# topology annotations (both reference the KAI Topology gpu-lab-topology):
+#   - required = block: the WHOLE group must fit inside one block. A block is
+#     2 racks / 4 nodes / 32 GPUs, so the group fills exactly one block.
+#   - preferred = rack: within that block, KAI packs as tightly as it can by rack.
+#     A rack holds 2 nodes, so the 4 pods pack 2-per-rack across the block's 2 racks.
+# Net effect: all 4 pods land in a single block, co-located 2-per-rack.
+#
+# NOTE: this uses whole-workload topology (required/preferred placement). KAI also
+# has a finer-grained "segment" mechanism (kai.scheduler/segment-size +
+# segment-topology-*-placement) that pins fixed-size sub-groups to a domain each;
+# for LWS that path is not usable in the pinned KAI release (the generated
+# PodGroup nests a segment as a mid-level SubGroup with minMember, which KAI's own
+# admission webhook rejects), so we express the same intent with preferred=rack.
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: lws-topology
+  namespace: kai-lws
+  annotations:
+    kai.scheduler/topology: gpu-lab-topology
+    kai.scheduler/topology-required-placement: cloud.provider.com/topology-block
+    kai.scheduler/topology-preferred-placement: cloud.provider.com/topology-rack
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 4
+    leaderTemplate:
+      metadata:
+        labels:
+          kai.scheduler/queue: lws-queue
+      spec:
+        schedulerName: kai-scheduler
+        containers:
+          - name: leader
+            image: registry.k8s.io/pause:3.10
+            resources:
+              requests:
+                cpu: "100m"
+                nvidia.com/gpu: "8"
+              limits:
+                nvidia.com/gpu: "8"
+    workerTemplate:
+      metadata:
+        labels:
+          kai.scheduler/queue: lws-queue
+      spec:
+        schedulerName: kai-scheduler
+        containers:
+          - name: worker
+            image: registry.k8s.io/pause:3.10
+            resources:
+              requests:
+                cpu: "100m"
+                nvidia.com/gpu: "8"
+              limits:
+                nvidia.com/gpu: "8"
