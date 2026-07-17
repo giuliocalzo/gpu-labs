@@ -39,6 +39,7 @@ under `scenarios/`, driven by a single `demo.sh` CLI.
 | [`kai-priority-preemption`](scenarios/kai-priority-preemption/README.md) | **KAI** priority preemption: a full queue of preemptible `train` jobs is **preempted** by higher-priority `inference` jobs in the same queue; the evicted `train` jobs wait Pending. |
 | [`kai-podgroup-gang`](scenarios/kai-podgroup-gang/README.md) | **KAI** explicit `PodGroup`: a hand-authored gang (`minMember`) is admitted **all-or-nothing**; a 2nd gang stays fully Pending even with one node free (a partial gang can't run). |
 | [`volcano-gang`](scenarios/volcano-gang/README.md) | **Volcano** batch scheduler: a Job group is gang-admitted all-or-nothing under a Volcano `Queue`'s capacity; a 2nd equal gang waits (comparison to Kueue). |
+| [`volcano-queue-capacity`](scenarios/volcano-queue-capacity/README.md) | **Volcano** queue resource management: team-a borrows the whole cluster while team-b is idle; when team-b submits, the `capacity` plugin's `reclaim` action evicts team-a's over-`deserved` jobs back to each queue's fair share. |
 
 Each scenario links to its own `README.md` above, describing exactly what it
 tests, how it's wired, and what to look for.

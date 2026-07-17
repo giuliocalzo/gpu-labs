@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: volcano-queue
+---
+# Volcano queue with the capacity plugin's three-level model:
+#   deserved   - the queue's fair share; jobs may exceed it while others are idle,
+#                but resources above deserved can be reclaimed by other queues.
+#   capability - the hard upper bound on what the queue can consume.
+# team-a: deserved 32 GPUs, capability 64 (may borrow the whole cluster). cpu is
+# set large so gpu is the only binding/reclaimable resource. reclaimable: true
+# lets other queues reclaim team-a's over-deserved (borrowed) resources.
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: vol-queue-a
+spec:
+  reclaimable: true
+  deserved:
+    cpu: "1000"
+    nvidia.com/gpu: 32
+  capability:
+    cpu: "1000"
+    nvidia.com/gpu: 64
+---
+# team-b: same shape. It sits idle at first, then submits and reclaims its
+# deserved 32 GPUs from team-a.
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: vol-queue-b
+spec:
+  reclaimable: true
+  deserved:
+    cpu: "1000"
+    nvidia.com/gpu: 32
+  capability:
+    cpu: "1000"
+    nvidia.com/gpu: 64

@@ -314,6 +314,22 @@ uninstall_volcano() {
   kubectl_ctx delete namespace volcano-system --ignore-not-found >/dev/null 2>&1 || true
 }
 
+# configure_volcano_scheduler <conf-file>
+# Replace the Volcano scheduler's config (actions + plugins) with <conf-file> and
+# restart the scheduler so it takes effect. Volcano's default config only enables
+# "enqueue, allocate, backfill" with the proportion plugin, so scenarios that need
+# the reclaim action, the capacity plugin, or the network-topology-aware plugin
+# ship their own scheduler.conf and apply it here.
+configure_volcano_scheduler() {
+  local conf="$1"
+  step "Configuring the Volcano scheduler (scenario-specific actions/plugins)"
+  kubectl_ctx -n volcano-system create configmap volcano-scheduler-configmap \
+    --from-file=volcano-scheduler.conf="$conf" \
+    --dry-run=client -o yaml | kubectl_ctx apply -f - >/dev/null
+  kubectl_ctx -n volcano-system rollout restart deploy/volcano-scheduler >/dev/null
+  kubectl_ctx -n volcano-system rollout status deploy/volcano-scheduler --timeout=120s
+}
+
 # Install Kubeflow Trainer V2 via Helm (scenario-scoped, not part of
 # install_base). Idempotent via 'helm upgrade -i'. This is the successor to the
 # v1 Training Operator: it ships the trainer.kubeflow.org CRDs (TrainJob,
@@ -529,6 +545,61 @@ EOF
   done
 }
 
+# volcano_gpu_job <ns> <queue> <name> <gpus> [minAvailable] [replicas]
+# Emits a Volcano vcjob: <replicas> pods (default 1) in one task, each holding
+# <gpus> whole GPUs, gang-admitted at minAvailable (default = replicas). The
+# container is a `sleep` placeholder (not pause): when Volcano reclaims/evicts a
+# pod, pause exits 0 and the job would look complete, whereas sleep exits
+# non-zero so the job is recreated and the reclaimed work stays visibly Pending.
+volcano_gpu_job() {
+  local ns="$1" queue="$2" name="$3" gpus="$4" min="${5:-1}" reps="${6:-1}"
+  cat <<EOF
+---
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: $name
+  namespace: $ns
+spec:
+  schedulerName: volcano
+  queue: $queue
+  minAvailable: $min
+  maxRetry: 100
+  # When Volcano reclaims (evicts) a pod, recreate it so the reclaimed work stays
+  # visibly Pending instead of vanishing.
+  policies:
+    - event: PodEvicted
+      action: RestartPod
+  tasks:
+    - name: w
+      replicas: $reps
+      template:
+        spec:
+          schedulerName: volcano
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 5
+          containers:
+            - name: c
+              image: busybox:1.36
+              command: ["sleep", "100000"]
+              resources:
+                requests:
+                  cpu: "100m"
+                  nvidia.com/gpu: "$gpus"
+                limits:
+                  nvidia.com/gpu: "$gpus"
+EOF
+}
+
+# submit_volcano_jobs <ns> <queue> <name-prefix> <count> <gpus>
+# Applies <count> single-pod Volcano GPU jobs named <prefix>-1 .. <prefix>-<count>.
+submit_volcano_jobs() {
+  local ns="$1" queue="$2" prefix="$3" count="$4" gpus="$5" i
+  for i in $(seq 1 "$count"); do
+    volcano_gpu_job "$ns" "$queue" "${prefix}-${i}" "$gpus"
+  done | kubectl_ctx apply -f -
+}
+
 # ---------------------------------------------------------------------------
 # Generic inspection helpers (scenarios compose these)
 # ---------------------------------------------------------------------------
@@ -637,6 +708,48 @@ wait_for_pods_phase() {
     sleep 2
   done
   return 1
+}
+
+# wait_for_volcano_pg_phase <count> <phase> <ns> <queue> [tries] - poll until at
+# least <count> Volcano PodGroups in <ns> belonging to <queue> reach <phase>
+# (Running once a gang is admitted, Pending/Inqueue while it waits). Volcano
+# reflects reclaim reliably at the PodGroup level even when an evicted pod is not
+# immediately recreated, so scenarios wait on this rather than pod phase.
+wait_for_volcano_pg_phase() {
+  local want="$1" phase="$2" ns="$3" queue="$4" tries="${5:-60}" i n
+  for i in $(seq 1 "$tries"); do
+    n=$(kubectl_ctx get podgroups.scheduling.volcano.sh -n "$ns" \
+      -o jsonpath="{range .items[?(@.spec.queue=='$queue')]}{.status.phase}{'\n'}{end}" 2>/dev/null \
+      | grep -c "^${phase}$" || true)
+    [ "$n" -ge "$want" ] && return 0
+    sleep 2
+  done
+  return 1
+}
+
+# inspect_volcano_queues <queue>... - table of Volcano queues showing each queue's
+# deserved (fair share), capability (hard cap), live allocated gpu, and state.
+inspect_volcano_queues() {
+  kubectl_ctx get queues.scheduling.volcano.sh "$@" -o custom-columns=\
+'QUEUE:.metadata.name,'\
+'DESERVED-GPU:.spec.deserved.nvidia\.com/gpu,'\
+'CAP-GPU:.spec.capability.nvidia\.com/gpu,'\
+'ALLOC-GPU:.status.allocated.nvidia\.com/gpu,'\
+'STATE:.status.state' 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+}
+
+# inspect_volcano_podgroups <ns> - one row per PodGroup (labelled by its owning
+# Volcano job) with its queue, gang size (minMember) and phase, sorted by queue
+# then phase, so admitted (Running) vs waiting (Pending/Inqueue) gangs are visible
+# at a glance.
+inspect_volcano_podgroups() {
+  local ns="$1"
+  kubectl_ctx get podgroups.scheduling.volcano.sh -n "$ns" -o custom-columns=\
+'JOB:.metadata.ownerReferences[0].name,'\
+'QUEUE:.spec.queue,'\
+'MINMEMBER:.spec.minMember,'\
+'PHASE:.status.phase' 2>/dev/null \
+    | { read -r h; echo "$h"; sort -k2,2 -k4,4; } | sed 's/^/    /' || echo "    (none)"
 }
 
 # inspect_kai_queues <queue>... - table of KAI queues showing each queue's gpu
