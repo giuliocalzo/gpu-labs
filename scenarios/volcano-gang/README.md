@@ -57,3 +57,37 @@ The other `kueue-*` scenarios show the Kueue side of this table.
   doesn't fit the queue's 16-GPU capacity, so Volcano holds the whole group back.
 - Free up the first gang (`./demo.sh clean volcano-gang` then re-run, or delete
   `training-a`) and `training-b` is admitted in its place.
+
+## Sample output
+
+Captured from a fresh `./demo.sh volcano-gang` run (the inspection step):
+
+```text
+==> Inspection: volcano-gang
+--- Volcano Queue (capacity gate) ---
+    NAME           STATE   CAP-GPU
+    volcano-demo   Open    16
+
+--- PodGroups (one per job; Running = gang admitted, Inqueue/Pending = waiting) ---
+    NAME                                              MINMEMBER   PHASE
+    training-a-89fe30c8-c93b-4e1f-b1ca-5defbf763e3d   2           Running
+    training-b-c1098fc3-8068-4063-ad1f-4e911f6e09a3   2           Pending
+
+--- Volcano Jobs ---
+    NAME         QUEUE          MIN   PHASE     RUNNING
+    training-a   volcano-demo   2     Running   2
+    training-b   volcano-demo   2     Pending   <none>
+
+--- Pods (only the admitted gang has pods; the waiting gang has none yet) ---
+    POD                   PHASE     NODE
+    training-a-worker-0   Running   gpu-lab-worker4
+    training-a-worker-1   Running   gpu-lab-worker7
+```
+
+**What it shows:** Volcano gang-admits a whole job at once. `training-a`'s PodGroup
+is `Running` with both worker pods (`MINMEMBER 2`) on two nodes. The
+`volcano-demo` queue caps capacity at 16 GPUs, which fits exactly one 2-worker
+gang, so `training-b`'s PodGroup stays `Pending` and Volcano creates **no pods**
+for it — you never see a half-scheduled gang (one worker Running, one Pending).
+Like the Kueue gang scenarios, capacity (not raw free GPUs) gates the second gang;
+this is the Volcano scheduler's equivalent of Kueue's all-or-nothing admission.

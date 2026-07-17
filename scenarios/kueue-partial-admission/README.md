@@ -46,3 +46,40 @@ GPU reservations needed to observe the reduced-size admission.
   reports **5**, not the original 8 - Kueue shrank it to fit.
 - 5 pods are Running (one per admitted slot); `partial-cq` shows
   `nvidia.com/gpu=40` fully reserved.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-partial-admission` run (the inspection step):
+
+```text
+==> Inspection: kueue-partial-admission
+--- Workload (admitted at reduced size) ---
+--- Workloads in 'partial-admission' (priority / reserved / admitted) ---
+NAME                QUEUE           PRIORITY   RESERVED   ADMITTED
+job-partial-8e3cd   partial-queue   0          True       True
+
+--- ClusterQueue 'partial-cq' ---
+NAME         PENDING   ADMITTED   RESERVING
+partial-cq   0         1          1
+    reserved gpu-flavor: cpu=250m nvidia.com/gpu=40
+
+--- Job parallelism: requested vs admitted ---
+    requested parallelism: 8 (64 GPU)
+    min parallelism:       2
+    current parallelism:   5 (Kueue shrank it to fit 40 GPU)
+
+--- Pods (one per admitted parallel slot) ---
+    POD             PHASE     NODE
+    partial-5lmvc   Running   gpu-lab-worker5
+    partial-66jm5   Running   gpu-lab-worker6
+    partial-bv8b6   Running   gpu-lab-worker7
+    partial-ldtvv   Running   gpu-lab-worker2
+    partial-pspfb   Running   gpu-lab-worker3
+```
+
+**What it shows:** The Job asked for `parallelism: 8` (8 × 8 = 64 GPUs) but the
+quota is only 40 GPUs. Instead of leaving the whole Job `Pending`, Kueue used the
+`job-min-parallelism: 2` annotation to **shrink** it to the largest size that fits
+— `parallelism: 5` (5 × 8 = 40 GPUs). The Workload is `ADMITTED: True`, exactly 5
+pods are Running, and `partial-cq` shows all `nvidia.com/gpu=40` reserved. The Job
+runs partially now rather than not at all.

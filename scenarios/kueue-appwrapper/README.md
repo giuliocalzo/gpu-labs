@@ -53,3 +53,42 @@ just the GPU reservations needed to observe gang admission and quota gating.
   has a wrapped Job (`kubectl get jobs -n appwrapper`) and pods.
 - `appwrapper-cq` shows `nvidia.com/gpu=16` reserved (fully used).
 - The pending Workload's condition explains it is waiting for quota.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-appwrapper` run (the inspection step):
+
+```text
+==> Inspection: kueue-appwrapper
+--- Workloads (one AppWrapper = one gang Workload) ---
+--- Workloads in 'appwrapper' (priority / reserved / admitted) ---
+NAME                        QUEUE              PRIORITY   RESERVED   ADMITTED
+appwrapper-aw-6znwg-5401a   appwrapper-queue   0          False      <none>
+appwrapper-aw-kcbzz-8be04   appwrapper-queue   0          True       True
+
+--- ClusterQueue 'appwrapper-cq' ---
+NAME            PENDING   ADMITTED   RESERVING
+appwrapper-cq   1         1          1
+    reserved gpu-flavor: cpu=100m nvidia.com/gpu=16
+
+--- AppWrappers ---
+    NAME       SUSPEND   STATUS
+    aw-6znwg   true      Suspended
+    aw-kcbzz   <none>    Running
+
+--- Wrapped Jobs (only the admitted AppWrapper has one) ---
+    NAME           COMPLETIONS   SUSPEND
+    aw-job-xcswj   2             false
+
+--- Pods (of the admitted AppWrapper's wrapped Job) ---
+    POD                  PHASE     NODE
+    aw-job-xcswj-ct4p5   Running   gpu-lab-worker3
+    aw-job-xcswj-l9mrs   Running   gpu-lab-worker2
+```
+
+**What it shows:** Each AppWrapper wraps a Job of 2 pods × 8 GPUs = 16 GPUs, and
+the quota (`nvidia.com/gpu=16`) fits one. `aw-kcbzz` is `ADMITTED: True` /
+`Running`: the AppWrapper controller created its wrapped Job (`aw-job-xcswj`,
+`SUSPEND: false`) and both pods are Running. `aw-6znwg` stays `SUSPEND: true` /
+`Suspended` with a `Pending` Workload ("16 more needed") and **no wrapped Job at
+all** — Kueue gates the whole AppWrapper before its contents are ever created.

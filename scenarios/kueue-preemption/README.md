@@ -38,3 +38,38 @@ lower-priority one to fit within the same ClusterQueue's quota.
   were evicted and the preemptor/preemptee priorities.
 - `preemption-cq` stays at `nvidia.com/gpu=32` reserved (2 high + 2 surviving
   low).
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-preemption` run (the inspection step):
+
+```text
+==> Inspection: kueue-preemption
+--- Workloads in 'preemption' (priority / reserved / admitted) ---
+NAME               QUEUE              PRIORITY   RESERVED   ADMITTED
+job-high-1-3a5e7   preemption-queue   1000       True       True
+job-high-2-9f5bc   preemption-queue   1000       True       True
+job-low-1-4eb61    preemption-queue   100        True       True
+job-low-2-4368e    preemption-queue   100        True       True
+job-low-3-f31cb    preemption-queue   100        False      False
+job-low-4-9dd00    preemption-queue   100        False      False
+
+--- ClusterQueue 'preemption-cq' ---
+NAME            PENDING   ADMITTED   RESERVING
+preemption-cq   2         4          4
+    reserved gpu-flavor: cpu=200m nvidia.com/gpu=32
+
+--- Preempted workloads (evicted to make room) ---
+    WORKLOAD          MESSAGE
+    job-low-3-f31cb   Preempted to accommodate a workload (UID: b5743c4d-4f61-4c4f-ad4c-b88b0ba861b0, JobUID: 0152b2bb-6bfe-4e7a-b8b7-371ce3d4dbf0)
+    job-low-4-9dd00   Preempted to accommodate a workload (UID: 5798f8d7-fb4d-40c3-92fe-d8b9b6ee7913, JobUID: bc48821e-cb3c-4964-ae50-4a5e842d891e)
+```
+
+**What it shows:** The four low-priority jobs were admitted first and filled the
+quota (`nvidia.com/gpu=32`). When the two `job-high-*` (priority 1000) workloads
+arrived, Kueue **evicted** two running low-priority workloads (`job-low-3`,
+`job-low-4` — see the "Preempted to accommodate a workload" messages) to make
+room. The final state: both high-priority workloads plus two surviving
+low-priority ones are `ADMITTED: True`, while the two preempted ones are back to
+`PENDING`. Unlike `kueue-workload-priority`, here priority acts on *already
+running* work — that is preemption.

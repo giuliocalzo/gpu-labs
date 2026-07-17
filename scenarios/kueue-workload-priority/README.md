@@ -37,3 +37,34 @@ quota is scarce - without preempting anything already running.
 - The Workload table shows `PRIORITY` 1000 vs 100.
 - `priority-cq` reserves `nvidia.com/gpu=32` (4 × 8), fully consumed by the
   high-priority jobs.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-workload-priority` run (the inspection step):
+
+```text
+==> Inspection: kueue-workload-priority
+--- Workloads in 'priority' (priority / reserved / admitted) ---
+NAME               QUEUE            PRIORITY   RESERVED   ADMITTED
+job-high-1-f9bfe   priority-queue   1000       True       True
+job-high-2-7cb4b   priority-queue   1000       True       True
+job-high-3-4826c   priority-queue   1000       True       True
+job-high-4-f76ac   priority-queue   1000       True       True
+job-low-1-d5309    priority-queue   100        False      <none>
+job-low-2-77750    priority-queue   100        False      <none>
+job-low-3-cf7ea    priority-queue   100        False      <none>
+job-low-4-1abcd    priority-queue   100        False      <none>
+
+--- ClusterQueue 'priority-cq' ---
+NAME          PENDING   ADMITTED   RESERVING
+priority-cq   4         4          4
+    reserved gpu-flavor: cpu=200m nvidia.com/gpu=32
+```
+
+**What it shows:** All 8 jobs target the same queue, but the `WorkloadPriorityClass`
+values (`PRIORITY` 1000 vs 100) set the admission order. The quota
+(`nvidia.com/gpu=32` = 4 × 8 GPUs) only fits four jobs, so Kueue admits the four
+`job-high-*` workloads (`ADMITTED: True`) and leaves the four `job-low-*` ones
+`PENDING`. This is ordering-by-priority at admission time (not preemption — the
+low-priority jobs simply never got in); `priority-cq` shows 4 admitted / 4 pending
+with all 32 GPUs reserved by the high-priority jobs.

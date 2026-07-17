@@ -37,3 +37,52 @@ idle capacity and then reclaiming a fair share via preemption.
   (32 GPUs each). The inspection prints the admitted count per team.
 - Some Team A workloads move back to Pending - they were preempted so Team B
   could reclaim its fair share.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-fair-sharing` run (the inspection step):
+
+```text
+==> Inspection: kueue-fair-sharing
+=== Team A ===
+--- Workloads in 'team-a' (priority / reserved / admitted) ---
+NAME            QUEUE          PRIORITY   RESERVED   ADMITTED
+job-a-1-f8e37   team-a-queue   0          False      False
+job-a-2-2007f   team-a-queue   0          True       True
+job-a-3-f8c5f   team-a-queue   0          False      False
+job-a-4-87fda   team-a-queue   0          True       True
+job-a-5-92778   team-a-queue   0          False      False
+job-a-6-8e3e0   team-a-queue   0          True       True
+job-a-7-79764   team-a-queue   0          True       True
+job-a-8-c3093   team-a-queue   0          False      False
+
+=== Team B ===
+--- Workloads in 'team-b' (priority / reserved / admitted) ---
+NAME            QUEUE          PRIORITY   RESERVED   ADMITTED
+job-b-1-5a3d0   team-b-queue   0          True       True
+job-b-2-514b6   team-b-queue   0          True       True
+job-b-3-1d2a7   team-b-queue   0          True       True
+job-b-4-1c743   team-b-queue   0          True       True
+
+--- ClusterQueue 'team-a-cq' ---
+NAME        PENDING   ADMITTED   RESERVING
+team-a-cq   4         4          4
+    reserved gpu-flavor: cpu=200m nvidia.com/gpu=32
+
+--- ClusterQueue 'team-b-cq' ---
+NAME        PENDING   ADMITTED   RESERVING
+team-b-cq   0         4          4
+    reserved gpu-flavor: cpu=200m nvidia.com/gpu=32
+
+Admitted workloads (each = 8 GPUs):
+    Team A admitted: 4
+    Team B admitted: 4
+    Expect a roughly even split (~4 vs ~4) once B has reclaimed its share.
+```
+
+**What it shows:** Team A submitted 8 jobs first and initially borrowed the whole
+cluster, but once Team B submitted its 4 jobs, fair sharing rebalanced to an even
+**4 vs 4** split — each team ends with `nvidia.com/gpu=32` reserved (4 × 8 GPUs).
+Team A now has 4 admitted and 4 back in `PENDING` (they were preempted so Team B
+could reclaim its half); Team B has all 4 admitted and 0 pending. The two
+ClusterQueues share one cohort, so the total stays at the cluster's 64 GPUs.

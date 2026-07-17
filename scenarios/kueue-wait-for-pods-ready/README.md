@@ -53,3 +53,42 @@ letting a wedged job sit on GPUs forever.
 > repeatedly (up to `requeuingStrategy.backoffLimitCount`). That's expected — it
 > models a genuinely broken job that Kueue keeps cycling rather than letting it
 > squat on quota.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-wait-for-pods-ready` run (the inspection step):
+
+```text
+==> Inspection: kueue-wait-for-pods-ready
+--- Workloads in 'wait-ready' (priority / reserved / admitted) ---
+NAME                    QUEUE              PRIORITY   RESERVED   ADMITTED
+job-never-ready-fa57c   wait-ready-queue   0          False      False
+
+--- Workload conditions (PodsReady=False -> Evicted: PodsReadyTimeout) ---
+    QuotaReserved=False (Pending)
+    Evicted=True (PodsReadyTimeout)
+    Admitted=False (NoReservation)
+    Requeued=False (PodsReadyTimeout)
+    PodsReady=False (WaitForStart)
+    requeue count: 1
+
+--- Eviction / requeue events ---
+    REASON                         COUNT    MESSAGE
+    QuotaReserved                  <none>   Quota reserved in ClusterQueue wait-ready-cq, wait time since queued was 0s
+    Admitted                       <none>   Admitted by ClusterQueue wait-ready-cq, wait time since reservation was 0s
+    EvictedDueToPodsReadyTimeout   <none>   Exceeded the PodsReady timeout wait-ready/job-never-ready-fa57c
+
+--- Pods (Running but READY 0/1: the failing readiness probe) ---
+    NAME                READY   STATUS        RESTARTS   AGE
+    never-ready-8tnws   0/1     Terminating   0          2m1s
+    never-ready-gbf5w   0/1     Terminating   0          2m1s
+```
+
+**What it shows:** The Job was admitted and its pods started, but a deliberately
+failing readiness probe keeps them at `READY 0/1` forever. After the 120s
+`waitForPodsReady` timeout, Kueue **evicted** the whole gang (`Evicted=True`,
+reason `PodsReadyTimeout`) and requeued it (`requeue count: 1`) — freeing the
+quota instead of letting a wedged job hold GPUs. At the captured moment the pods
+are `Terminating` (being torn down for the requeue) and the Workload is back to
+un-admitted, waiting to try again. This is the timing-dependent state; re-running
+may catch it mid-cycle with a higher requeue count.

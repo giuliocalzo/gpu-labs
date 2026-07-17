@@ -65,3 +65,39 @@ mid-level SubGroup **with** `minMember`, which KAI's own admission webhook rejec
 so the pods never get grouped. Until that is fixed in a KAI release, this scenario
 expresses the same intent — one block, 2 pods per rack — with whole-group
 `required=block` + `preferred=rack`, which is fully supported today.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kai-lws-topology` run (the inspection step):
+
+```text
+==> Inspection: kai-lws-topology
+--- LeaderWorkerSet ---
+    NAME           READY   DESIRED   UP-TO-DATE   AGE
+    lws-topology   1       1         1            5s
+
+--- KAI PodGroup (the scheduler-facing gang, one per LWS replica) ---
+    NAME                                                           AGE
+    pg-lws-topology-97352457-f156-4f58-86bf-63ddda0d29d1-group-0   4s
+
+--- Pods (all Running = KAI admitted the whole gang all-or-nothing) ---
+    POD                PHASE     NODE
+    lws-topology-0     Running   gpu-lab-worker3
+    lws-topology-0-1   Running   gpu-lab-worker4
+    lws-topology-0-2   Running   gpu-lab-worker
+    lws-topology-0-3   Running   gpu-lab-worker2
+
+--- Placement (whole group in ONE block, packed 2 pods per rack) ---
+    POD                                      BLOCK    RACK     NODE
+    lws-topology-0                           block-1  rack-2   gpu-lab-worker3
+    lws-topology-0-2                         block-1  rack-1   gpu-lab-worker
+    lws-topology-0-3                         block-1  rack-1   gpu-lab-worker2
+    lws-topology-0-1                         block-1  rack-2   gpu-lab-worker4
+```
+
+**What it shows:** KAI built one `PodGroup` for the LWS replica and gang-scheduled
+all 4 pods to Running together. `required=block` put the whole group in a single
+block (`block-1`), and `preferred=rack` packed it **2 pods per rack** — two pods
+on `rack-1`, two on `rack-2` (each rack is 2 nodes, so a rack holds exactly one
+pair). This is the same "2 per rack in one block" layout the segment mechanism
+would produce, achieved with whole-group required/preferred placement.

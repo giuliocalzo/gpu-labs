@@ -47,3 +47,47 @@ operator is installed by the scenario's `pre_run` hook and removed by `post_run`
   RayJob); the pending RayJob has none.
 - `rayjob-cq` shows `nvidia.com/gpu=8` reserved (fully used).
 - The pending Workload's condition explains it is waiting for quota.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-rayjob` run (the inspection step):
+
+```text
+==> Inspection: kueue-rayjob
+--- Workloads (one RayJob = one gang Workload) ---
+--- Workloads in 'rayjob' (priority / reserved / admitted) ---
+NAME                        QUEUE          PRIORITY   RESERVED   ADMITTED
+rayjob-rayjob-b2mvb-aa02a   rayjob-queue   0          True       True
+rayjob-rayjob-dfchc-6905d   rayjob-queue   0          False      <none>
+
+--- ClusterQueue 'rayjob-cq' ---
+NAME        PENDING   ADMITTED   RESERVING
+rayjob-cq   1         1          1
+    reserved gpu-flavor: cpu=2500m memory=3272Mi nvidia.com/gpu=8
+
+--- RayJobs (deployment / job status) ---
+    NAME           DEPLOYMENT     JOB      SUSPEND
+    rayjob-b2mvb   Initializing   <none>   <none>
+    rayjob-dfchc   Suspended      <none>   true
+
+--- RayClusters (only the admitted RayJob has one) ---
+    NAME                 DESIRED WORKERS   AVAILABLE WORKERS   CPUS   MEMORY   GPUS   STATUS   AGE
+    rayjob-b2mvb-vhnkf   1                                     2      3Gi      8               41s
+
+--- Pods (head + worker of the admitted Ray cluster) ---
+    POD                                           PHASE     NODE
+    rayjob-b2mvb-vhnkf-gpu-workers-worker-r9bb9   Pending   gpu-lab-worker4
+    rayjob-b2mvb-vhnkf-head-tghwp                 Pending   gpu-lab-worker
+
+--- Why is the second RayJob pending? ---
+    QuotaReserved: Pending - couldn't assign flavors to pod set gpu-workers: insufficient unused quota for nvidia.com/gpu in flavor gpu-flavor, 8 more needed
+    PodsReady: WaitForStart - Not all pods are ready or succeeded
+```
+
+**What it shows:** Two RayJobs were submitted; the quota (`nvidia.com/gpu=8`) fits
+exactly one Ray cluster (head + one GPU worker). The first RayJob is
+`ADMITTED: True` and KubeRay materialised its RayCluster (`rayjob-b2mvb-vhnkf`,
+8 GPUs) with head+worker pods. The second RayJob is held `SUSPEND: true` by Kueue,
+its Workload `Pending` ("8 more needed"), and **no RayCluster or pods exist for
+it** — gang gating happens before any Ray resources are created. (Head/worker
+pods read `Pending` at capture time as they were still starting.)

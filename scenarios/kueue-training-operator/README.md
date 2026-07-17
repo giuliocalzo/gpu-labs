@@ -61,3 +61,38 @@ one - just the GPU reservations needed to observe gang admission and quota gatin
   one has pods (`kubectl get pods -n training`: 2 training nodes).
 - `training-cq` shows `nvidia.com/gpu=16` reserved (fully used).
 - The pending Workload's condition explains it is waiting for quota.
+
+## Sample output
+
+Captured from a fresh `./demo.sh kueue-training-operator` run (the inspection step):
+
+```text
+==> Inspection: kueue-training-operator
+--- Workloads (one TrainJob = one gang Workload) ---
+--- Workloads in 'training' (priority / reserved / admitted) ---
+NAME                         QUEUE            PRIORITY   RESERVED   ADMITTED
+trainjob-torch-8s6jn-21a58   training-queue   0          True       True
+trainjob-torch-m2xt4-cac69   training-queue   0          False      <none>
+
+--- ClusterQueue 'training-cq' ---
+NAME          PENDING   ADMITTED   RESERVING
+training-cq   1         1          1
+    reserved gpu-flavor: cpu=100m nvidia.com/gpu=16
+
+--- TrainJobs ---
+    NAME          SUSPEND   STATE
+    torch-8s6jn   false     Resumed
+    torch-m2xt4   true      Suspended
+
+--- Pods (training nodes of the admitted TrainJob) ---
+    POD                          PHASE     NODE
+    torch-8s6jn-node-0-0-l654x   Running   gpu-lab-worker4
+    torch-8s6jn-node-0-1-qqp4m   Running   gpu-lab-worker3
+```
+
+**What it shows:** Each TrainJob runs 2 training nodes × 8 GPUs = 16 GPUs, and the
+quota (`nvidia.com/gpu=16`) fits one. `torch-8s6jn` is `ADMITTED: True` — Kueue
+resumed it (`SUSPEND: false`, `STATE: Resumed`) and the Trainer operator created
+its 2 node pods, both Running. `torch-m2xt4` stays `SUSPEND: true` /
+`STATE: Suspended` with a `Pending` Workload ("16 more needed") and **no pods** —
+Kueue admits or gates the whole TrainJob gang as a unit.
