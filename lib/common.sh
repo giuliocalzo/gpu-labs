@@ -475,6 +475,60 @@ submit_kai_jobs() {
   done | kubectl_ctx apply -f -
 }
 
+# kai_podgroup_gang <ns> <group> <queue> <minMember> <pod-count> <gpus> [prio]
+# Emits an EXPLICIT KAI PodGroup plus <pod-count> bare pods that join it via the
+# pod-group-name annotation. This is a gang: KAI admits the pods all-or-nothing,
+# running them only if at least <minMember> can be placed at once. Bare pods (no
+# owning controller) on purpose - a hand-authored PodGroup is only authoritative
+# for pods KAI does not own (for Job/Deployment pods KAI's PodGrouper synthesises
+# its own group and ignores the annotation). Each pod also carries a
+# gpu-lab/gang=<group> label so inspection can group pods by gang. The container
+# is a plain `sleep` placeholder holding <gpus> whole GPUs.
+kai_podgroup_gang() {
+  local ns="$1" group="$2" queue="$3" minm="$4" count="$5" gpus="$6" prio="${7:-train}" i
+  cat <<EOF
+---
+apiVersion: scheduling.run.ai/v2alpha2
+kind: PodGroup
+metadata:
+  name: $group
+  namespace: $ns
+spec:
+  minMember: $minm
+  queue: $queue
+  priorityClassName: $prio
+EOF
+  for i in $(seq 1 "$count"); do
+    cat <<EOF
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${group}-${i}
+  namespace: $ns
+  annotations:
+    pod-group-name: $group
+  labels:
+    kai.scheduler/queue: $queue
+    gpu-lab/gang: $group
+spec:
+  schedulerName: kai-scheduler
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 5
+  containers:
+    - name: c
+      image: busybox:1.36
+      command: ["sleep", "100000"]
+      resources:
+        requests:
+          cpu: "100m"
+          nvidia.com/gpu: "$gpus"
+        limits:
+          nvidia.com/gpu: "$gpus"
+EOF
+  done
+}
+
 # ---------------------------------------------------------------------------
 # Generic inspection helpers (scenarios compose these)
 # ---------------------------------------------------------------------------

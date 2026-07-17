@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kai-gang
+---
+# Root owns the cluster; cpu/memory unbounded so gpu is the only binding resource.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: kai-gang-root
+spec:
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
+---
+# A queue capped at 32 GPUs (4 nodes). Each gang is 3 pods x 8 GPUs = 24 GPUs, so
+# the first gang leaves exactly 8 GPUs (one node) of headroom under the limit -
+# room for ONE more pod, but not a whole 3-pod gang. That headroom is what makes
+# the all-or-nothing behaviour visible: a partial gang could take that node, a
+# real gang cannot.
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: kai-gang-queue
+spec:
+  parentQueue: kai-gang-root
+  resources:
+    cpu:    { quota: -1, limit: -1, overQuotaWeight: 1 }
+    gpu:    { quota: 32, limit: 32, overQuotaWeight: 0 }
+    memory: { quota: -1, limit: -1, overQuotaWeight: 1 }
